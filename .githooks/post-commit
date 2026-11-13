@@ -1,0 +1,29 @@
+#!/bin/sh
+# Runs after a commit is created. The commit stays even if lint or tests fail.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+if command -v npm >/dev/null 2>&1; then
+  NPM=npm
+elif command -v npm.cmd >/dev/null 2>&1; then
+  NPM=npm.cmd
+else
+  echo "post-commit: no se encontró npm en PATH"
+  exit 1
+fi
+
+run_step() {
+  name="$1"
+  script="$2"
+  echo "post-commit: ejecutando $name"
+  if "$NPM" run "$script"; then
+    return 0
+  fi
+  echo "post-commit: falló $name"
+  exit 1
+}
+
+run_step "lint" "lint"
+run_step "tests" "test"
+
+echo "post-commit: lint y tests OK"
+exit 0
