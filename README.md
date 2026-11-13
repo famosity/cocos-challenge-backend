@@ -33,6 +33,15 @@ $ npm install
 
 Ese comando también copia `.githooks` a `.git/hooks`. Después de cada commit corren los tests. Antes de un push corren lint, tests y build, y el push se detiene si alguno falla.
 
+La base local se levanta con Docker:
+
+```bash
+$ npm run db:up
+$ npm run test:db
+```
+
+Copia `.env.example` a `.env` si todavía no tienes `DATABASE_URL`. `npm run db:reset` vuelve a cargar `database.sql`.
+
 ## Compile and run the project
 
 ```bash

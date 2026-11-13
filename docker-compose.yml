@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cocos
+      POSTGRES_PASSWORD: cocos
+      POSTGRES_DB: cocos
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database.sql:/docker-entrypoint-initdb.d/01-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cocos -d cocos"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pgdata:

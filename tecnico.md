@@ -1,6 +1,8 @@
 # Notas técnicas
 
-El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Ninguno publica rutas todavía. La base no se abre en este paso: el módulo está listo para conectar el pool cuando haya un PostgreSQL local.
+El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Ninguno publica rutas todavía.
+
+La base de la API es un PostgreSQL local. `DATABASE_URL` apunta ahí. Neon queda en `NEON_DATABASE_URL` y no se usa para escribir. Para levantar la base: `npm run db:up`. Docker crea el contenedor y carga `database.sql`, que trae el esquema y los datos de prueba. `npm run test:db` comprueba la conexión: hay 4 usuarios y filas en instrumentos, órdenes y cotizaciones. `npm run db:reset` borra el volumen y vuelve a cargar el archivo. El ejemplo de la URL local está en `.env.example`.
 
 TypeScript ya estaba en modo estricto.
 

@@ -1,6 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { JsonLogger } from './common/json-logger.js';
+import { loadEnvFile } from './load-env.js';
+
+loadEnvFile();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { logger: new JsonLogger() });

@@ -5,7 +5,25 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 import { Injectable } from '@nestjs/common';
+import { Pool } from 'pg';
 let DatabaseService = class DatabaseService {
+    pool;
+    async query(sql, values = []) {
+        const result = await this.getPool().query(sql, values);
+        return result.rows;
+    }
+    async onModuleDestroy() {
+        await this.pool?.end();
+        this.pool = undefined;
+    }
+    getPool() {
+        const connectionString = process.env.DATABASE_URL;
+        if (!connectionString) {
+            throw new Error('DATABASE_URL is not set');
+        }
+        this.pool ??= new Pool({ connectionString });
+        return this.pool;
+    }
 };
 DatabaseService = __decorate([
     Injectable()
