@@ -31,6 +31,8 @@
 $ npm install
 ```
 
+Ese comando también copia `.githooks` a `.git/hooks`. Después de cada commit corren los tests. Antes de un push corren lint, tests y build, y el push se detiene si alguno falla.
+
 ## Compile and run the project
 
 ```bash

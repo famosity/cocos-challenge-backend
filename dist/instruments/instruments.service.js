@@ -5,13 +5,10 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 import { Injectable } from '@nestjs/common';
-let AppService = class AppService {
-    getHello() {
-        return 'Hello World!';
-    }
+let InstrumentsService = class InstrumentsService {
 };
-AppService = __decorate([
+InstrumentsService = __decorate([
     Injectable()
-], AppService);
-export { AppService };
-//# sourceMappingURL=app.service.js.map
+], InstrumentsService);
+export { InstrumentsService };
+//# sourceMappingURL=instruments.service.js.map
