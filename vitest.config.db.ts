@@ -7,5 +7,6 @@ export default defineConfig({
     root: './',
     include: ['test/database.db-test.ts'],
     fileParallelism: false,
+    reporters: ['verbose'],
   },
 });

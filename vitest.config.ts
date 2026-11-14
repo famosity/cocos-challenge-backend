@@ -8,5 +8,12 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    reporters: ['verbose'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text'],
+      include: ['src/**/*.ts'],
+      exclude: ['**/*.spec.ts', 'src/main.ts', 'src/common/json-logger.ts'],
+    },
   },
 });

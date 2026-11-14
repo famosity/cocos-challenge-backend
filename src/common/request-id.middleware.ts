@@ -17,7 +17,7 @@ export class RequestIdMiddleware implements NestMiddleware {
           level: 'info',
           requestId,
           method: req.method,
-          path: req.originalUrl.split('?')[0] ?? req.originalUrl,
+          path: req.originalUrl.split('?')[0],
           statusCode: res.statusCode,
           durationMs: Date.now() - started,
         }),
