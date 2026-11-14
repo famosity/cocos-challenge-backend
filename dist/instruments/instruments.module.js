@@ -5,12 +5,17 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 import { Module } from '@nestjs/common';
+import { DatabaseModule } from '../database/database.module.js';
+import { InstrumentsController } from './instruments.controller.js';
+import { InstrumentsRepository } from './instruments.repository.js';
 import { InstrumentsService } from './instruments.service.js';
 let InstrumentsModule = class InstrumentsModule {
 };
 InstrumentsModule = __decorate([
     Module({
-        providers: [InstrumentsService],
+        imports: [DatabaseModule],
+        controllers: [InstrumentsController],
+        providers: [InstrumentsService, InstrumentsRepository],
         exports: [InstrumentsService],
     })
 ], InstrumentsModule);
