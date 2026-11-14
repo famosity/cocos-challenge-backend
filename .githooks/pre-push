@@ -23,7 +23,7 @@ run_step() {
 }
 
 run_step "lint" "lint"
-run_step "tests" "test"
+run_step "tests" "test:check"
 run_step "build" "build"
 
 echo "pre-push: lint, tests y build OK"

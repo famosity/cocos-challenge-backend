@@ -22,7 +22,7 @@ run_step() {
   exit 1
 }
 
-run_step "tests" "test"
+run_step "tests" "test:check"
 
 echo "post-commit: tests OK"
 exit 0
