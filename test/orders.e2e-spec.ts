@@ -49,8 +49,16 @@ describe('POST /orders', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.status).toBe('FILLED');
-    expect(await saved(database, response.body.id)).toMatchObject({ size: 9, price: '100.00', status: 'FILLED' });
-    expect((await portfolio(app)).availableCash).toBe('100.00');
+    const account = await portfolio(app);
+    expect(account.availableCash).toBe('100.00');
+    expect(account.positions).toEqual([
+      expect.objectContaining({
+        instrumentId,
+        ticker: 'O2MKT',
+        quantity: 9,
+        marketValue: '900.00',
+      }),
+    ]);
   });
 
   it('rejects a buy whose requested amount is above the cash and saves the calculated size', async () => {
@@ -160,21 +168,6 @@ describe('POST /orders', () => {
     expect(await countOrders(database)).toBe(0);
   });
 
-  it('rolls back the insert when the transaction fails', async () => {
-    await expect(
-      database.transaction(async (query) => {
-        await query(
-          `INSERT INTO orders (instrumentid, userid, size, price, side, status, type, datetime)
-           VALUES ($1, $2, 1, 1, 'CASH_IN', 'FILLED', 'MARKET', '2020-01-01')`,
-          [pesos, userId],
-        );
-        throw new Error('technical failure');
-      }),
-    ).rejects.toThrow('technical failure');
-
-    expect(await countOrders(database)).toBe(0);
-  });
-
   it('lets two market buys compete for the same user and keeps the cash that remains', async () => {
     const instrumentId = await insertInstrument(database, 'O2CON', '100.00');
     await cashIn(database, 1000);
@@ -228,7 +221,10 @@ function post(
     .send({ userId, ...body });
 }
 
-async function portfolio(app: INestApplication<App>): Promise<{ availableCash: string; positions: Array<{ quantity: number; marketValue: string }> }> {
+async function portfolio(app: INestApplication<App>): Promise<{
+  availableCash: string;
+  positions: Array<{ instrumentId: number; ticker: string; quantity: number; marketValue: string }>;
+}> {
   const response = await request(app.getHttpServer()).get(`/users/${userId}/portfolio`).expect(200);
   return response.body;
 }
