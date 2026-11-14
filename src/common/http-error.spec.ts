@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { AppError } from './app-error.js';
-import { toErrorBody } from './http-error.js';
+import { toErrorBody } from '../common/http-error.js';
 
 const requestId = 'req-1';
 
