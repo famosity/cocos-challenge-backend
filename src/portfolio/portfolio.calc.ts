@@ -84,9 +84,19 @@ export function buildPortfolio(orders: TradeOrder[], quotes: Quote[]): Portfolio
 }
 
 export function availableToSell(orders: TradeOrder[], instrumentId: number): number {
-  const book = settle(orders).books.get(instrumentId);
-  if (!book) return 0;
-  return Math.max(0, book.qty - book.sellReserved);
+  return cashAndShares(orders, instrumentId).availableShares;
+}
+
+export function cashAndShares(
+  orders: TradeOrder[],
+  instrumentId: number,
+): { availableCashCents: bigint; availableShares: number } {
+  const { cashCents, reservedBuyCents, books } = settle(orders);
+  const book = books.get(instrumentId);
+  return {
+    availableCashCents: cashCents - reservedBuyCents,
+    availableShares: book ? Math.max(0, book.qty - book.sellReserved) : 0,
+  };
 }
 
 function settle(orders: TradeOrder[]): Settled {

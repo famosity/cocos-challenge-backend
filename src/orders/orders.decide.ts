@@ -1,0 +1,57 @@
+export type OrderRequest = {
+  side: 'BUY' | 'SELL';
+  type: 'MARKET' | 'LIMIT';
+  quantity?: number;
+  amountCents?: bigint;
+  priceCents?: number;
+};
+
+export type OrderDecision =
+  | { outcome: 'unprocessable'; code: 'ZERO_ORDER_QUANTITY' | 'QUOTE_UNAVAILABLE' }
+  | {
+      outcome: 'accept';
+      status: 'FILLED' | 'NEW';
+      size: number;
+      priceCents: number;
+    }
+  | {
+      outcome: 'reject';
+      status: 'REJECTED';
+      reason: 'INSUFFICIENT_FUNDS' | 'INSUFFICIENT_SHARES';
+      size: number;
+      priceCents: number;
+    };
+
+export function decideOrder(
+  order: OrderRequest,
+  availableCashCents: bigint,
+  availableShares: number,
+  closeCents: number | null,
+): OrderDecision {
+  const priceCents = order.type === 'MARKET' ? closeCents : (order.priceCents ?? null);
+  if (priceCents === null) {
+    return { outcome: 'unprocessable', code: 'QUOTE_UNAVAILABLE' };
+  }
+
+  const size = order.quantity ?? sharesFor(order.amountCents ?? 0n, priceCents);
+  if (size === 0) {
+    return { outcome: 'unprocessable', code: 'ZERO_ORDER_QUANTITY' };
+  }
+
+  const status = order.type === 'MARKET' ? 'FILLED' : 'NEW';
+  if (order.side === 'BUY') {
+    const requested = order.amountCents ?? BigInt(size) * BigInt(priceCents);
+    if (requested > availableCashCents) {
+      return { outcome: 'reject', status: 'REJECTED', reason: 'INSUFFICIENT_FUNDS', size, priceCents };
+    }
+  } else if (size > availableShares) {
+    return { outcome: 'reject', status: 'REJECTED', reason: 'INSUFFICIENT_SHARES', size, priceCents };
+  }
+
+  return { outcome: 'accept', status, size, priceCents };
+}
+
+function sharesFor(amountCents: bigint, priceCents: number): number {
+  if (priceCents <= 0) return 0;
+  return Number(amountCents / BigInt(priceCents));
+}

@@ -21,6 +21,8 @@ Un dato inválido responde 400, con código `VALIDATION_ERROR`. `details` nombra
 
 Un fallo que no estaba previsto responde 500. El mensaje público es "Error interno" y lleva el `requestId`. La causa y el stack se escriben una sola vez, en un log de nivel error. No vuelven en el JSON.
 
-Los errores conocidos usan `AppError`, con estado, código y mensaje. El filtro ya entiende `USER_NOT_FOUND` y `ZERO_ORDER_QUANTITY`. Hoy no hay ruta que los lance.
+`POST /orders` crea una orden nueva cada vez. Si el cliente no recibe la respuesta y vuelve a enviarla, puede aparecer otra fila mientras todavía haya disponibilidad. La transacción arranca en `READ COMMITTED`, bloquea `users.id` con `SELECT ... FOR UPDATE` y recién después lee el efectivo y las acciones libres. Una `MARKET` válida queda `FILLED` al último cierre. Una `LIMIT` válida queda `NEW`. Si faltan pesos o acciones, la fila se guarda igual, en `REJECTED`, con `INSUFFICIENT_FUNDS` o `INSUFFICIENT_SHARES`. Un monto que no alcanza para una acción responde 422 con `ZERO_ORDER_QUANTITY` y no inserta. Una `MARKET` sin cierre válido responde 422 con `QUOTE_UNAVAILABLE` y tampoco inserta. Una compra por $950 a $100 toma 9 acciones y deja el resto afuera. Si el monto pedido supera el efectivo, se rechaza aunque el importe redondeado entre.
+
+Los errores conocidos usan `AppError`, con estado, código y mensaje. La cartera lanza `USER_NOT_FOUND`. Las órdenes lanzan ese código, `INSTRUMENT_NOT_FOUND`, `ZERO_ORDER_QUANTITY` y `QUOTE_UNAVAILABLE`.
 
 Los hooks se activan al clonar con `npm install`. El script `prepare` copia `.githooks` a `.git/hooks`. Después de cada commit corren los tests, y el commit queda aunque fallen. Antes de un push corren lint, tests y build, en ese orden. Si uno falla, el script sale con código distinto de cero y el push no sigue.

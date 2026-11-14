@@ -42,6 +42,8 @@ $ npm run test:db
 
 Copia `.env.example` a `.env` si todavía no tienes `DATABASE_URL`. `npm run db:reset` vuelve a cargar `database.sql`.
 
+Un `POST /orders` es una solicitud nueva. Si el cliente pierde la respuesta y la reenvía, puede crearse otra orden mientras haya pesos o acciones disponibles.
+
 ## Compile and run the project
 
 ```bash
