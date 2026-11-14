@@ -4,6 +4,14 @@ El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes
 
 La base de la API es un PostgreSQL local. `DATABASE_URL` apunta ahí. Neon queda en `NEON_DATABASE_URL` y no se usa para escribir. Para levantar la base: `npm run db:up`. Docker crea el contenedor y carga `database.sql`, que trae el esquema y los datos de prueba. `npm run test:db` comprueba la conexión: hay 4 usuarios y filas en instrumentos, órdenes y cotizaciones. `npm run db:reset` borra el volumen y vuelve a cargar el archivo. El ejemplo de la URL local está en `.env.example`.
 
+`GET /users/:userId/portfolio` devuelve `totalValue`, `availableCash` y `positions`. Los importes salen como texto con dos decimales, por ejemplo `"500.00"`. `totalReturnPct` es un número con dos decimales, o `null` cuando la tenencia es negativa o falta el costo o el cierre.
+
+El efectivo suma los ingresos, los egresos y las operaciones `FILLED`. Una compra `LIMIT` en `NEW` reserva el importe: baja `availableCash` y no toca el total ni suma acciones. `CANCELLED` y `REJECTED` no mueven nada. Una tenencia en cero no aparece. Si a una posición le falta el último cierre, su `marketValue` queda `null` y el total de la cuenta también. El efectivo se sigue informando.
+
+El costo promedio se actualiza con las compras ejecutadas. Una venta parcial lo deja igual. Si la tenencia vuelve a cero, el costo se olvida. Una compra que pasa de −10 a 5 acciones usa el precio de esa compra para las 5 que quedan abiertas. Con un cierre de 120 y un costo de 100, el rendimiento es 20.
+
+Un id que no es un entero positivo responde 400. Un usuario que no existe responde 404 con `USER_NOT_FOUND`. Un usuario sin movimientos responde `"0.00"`, `"0.00"` y `positions` vacío. El cierre que se usa es la última fila de `marketdata` por fecha y, si la fecha coincide, por id.
+
 `GET /instruments?query=` busca el texto en el ticker o en el nombre, sin distinguir mayúsculas. "ggal" devuelve GGAL. "Galicia" también, porque está en el nombre. Si el ticker coincide entero, esa fila va primero. El resto se ordena por ticker y después por id. Si no hay coincidencias, la respuesta es `[]`. `%` y `_` se buscan como caracteres, no como comodines. Si `query` no viene, o queda vacío al quitar espacios, la respuesta es 400 con código `VALIDATION_ERROR` y el campo `query` en `details`.
 
 
