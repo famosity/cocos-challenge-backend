@@ -326,6 +326,31 @@ describe('POST /orders', () => {
     expect(await saved(database, atMax.body.id)).toMatchObject({ size: 2147483647, price: '1.00', status: 'REJECTED' });
   });
 
+  it('rejects a buy or a sale of the cash instrument and leaves the balance untouched', async () => {
+    await cashIn(database, 1000);
+    await seedOrder(database, pesos, 200, '1.00', 'CASH_OUT', 'FILLED', 'MARKET');
+    const before = await countOrders(database);
+
+    for (const side of ['BUY', 'SELL'] as const) {
+      for (const type of ['MARKET', 'LIMIT'] as const) {
+        const response = await post(
+          app,
+          type === 'LIMIT'
+            ? { instrumentId: pesos, side, type, quantity: 1, price: '1.00' }
+            : { instrumentId: pesos, side, type, quantity: 1 },
+        );
+        expect(response.status).toBe(422);
+        expect(response.body.code).toBe('INSTRUMENT_NOT_TRADABLE');
+      }
+    }
+
+    expect(await countOrders(database)).toBe(before);
+    expect(await portfolio(app)).toMatchObject({
+      availableCash: '800.00',
+      positions: [],
+    });
+  });
+
   it('returns 404 for an unknown user or instrument and 400 for a bad body', async () => {
     const instrumentId = await insertInstrument(database, 'O2BAD', '100.00');
 

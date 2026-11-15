@@ -30,8 +30,11 @@ export class OrdersService {
       const user = await this.orders.lockUser(query, order.userId);
       if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'El usuario no existe');
 
-      const instrument = await this.orders.instrumentExists(query, order.instrumentId);
-      if (!instrument) throw new AppError(404, 'INSTRUMENT_NOT_FOUND', 'El instrumento no existe');
+      const instrumentType = await this.orders.instrumentType(query, order.instrumentId);
+      if (instrumentType === null) throw new AppError(404, 'INSTRUMENT_NOT_FOUND', 'El instrumento no existe');
+      if (instrumentType.toUpperCase() === 'MONEDA') {
+        throw new AppError(422, 'INSTRUMENT_NOT_TRADABLE', 'El instrumento no se puede operar');
+      }
 
       const close = order.type === 'MARKET' ? await this.orders.latestClose(query, order.instrumentId) : null;
       const history = await this.orders.findOrders(query, order.userId);

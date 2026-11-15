@@ -65,6 +65,14 @@ describe('GET /instruments', () => {
     expect((response.body as Instrument[]).map((instrument) => instrument.ticker)).toEqual(['ZZEXACT', 'AAAPART']);
   });
 
+  it('does not list the cash instrument', async () => {
+    const byTicker = await request(app.getHttpServer()).get('/instruments').query({ query: 'ARS' }).expect(200);
+    const byName = await request(app.getHttpServer()).get('/instruments').query({ query: 'PESOS' }).expect(200);
+
+    expect(byTicker.body).toEqual([]);
+    expect(byName.body).toEqual([]);
+  });
+
   it('returns an empty list when nothing matches', async () => {
     const response = await request(app.getHttpServer())
       .get('/instruments')

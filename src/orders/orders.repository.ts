@@ -18,9 +18,9 @@ export class OrdersRepository {
     );
   }
 
-  instrumentExists(query: Sql, instrumentId: number): Promise<boolean> {
-    return query<{ id: number }>('SELECT id FROM instruments WHERE id = $1', [instrumentId]).then(
-      (rows) => rows.length > 0,
+  instrumentType(query: Sql, instrumentId: number): Promise<string | null> {
+    return query<{ type: string | null }>('SELECT type FROM instruments WHERE id = $1', [instrumentId]).then(
+      (rows) => (rows.length === 0 ? null : (rows[0]?.type ?? '')),
     );
   }
 

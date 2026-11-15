@@ -17,8 +17,9 @@ export class InstrumentsRepository {
     return this.database.query<InstrumentRow>(
       `SELECT id, ticker, name, type
        FROM instruments
-       WHERE ticker ILIKE '%' || $1 || '%' ESCAPE '\\'
-          OR name ILIKE '%' || $1 || '%' ESCAPE '\\'
+       WHERE upper(coalesce(type, '')) <> 'MONEDA'
+         AND (ticker ILIKE '%' || $1 || '%' ESCAPE '\\'
+          OR name ILIKE '%' || $1 || '%' ESCAPE '\\')
        ORDER BY CASE WHEN lower(ticker) = lower($2) THEN 0 ELSE 1 END,
                 ticker ASC,
                 id ASC`,
