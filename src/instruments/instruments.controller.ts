@@ -7,8 +7,11 @@ export class InstrumentsController {
   constructor(private readonly instruments: InstrumentsService) {}
 
   @Get()
-  search(@Query('query') query?: string): Promise<InstrumentRow[]> {
-    const term = query?.trim() ?? '';
+  search(@Query('query') query?: string | string[]): Promise<InstrumentRow[]> {
+    if (typeof query !== 'string') {
+      throw new BadRequestException([query === undefined ? 'query must not be empty' : 'query must be a single text']);
+    }
+    const term = query.trim();
     if (term.length === 0) {
       throw new BadRequestException(['query must not be empty']);
     }
