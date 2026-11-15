@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
-import { cashAndShares, usableCloseCents, type TradeOrder } from '../portfolio/portfolio.calc.js';
+import { cashAndShares, historyTrades, usableCloseCents } from '../portfolio/portfolio.calc.js';
 import { decideOrder } from './orders.decide.js';
 import type { ParsedOrder } from './orders.parse.js';
-import { OrdersRepository, type OrderRow } from './orders.repository.js';
+import { OrdersRepository } from './orders.repository.js';
 
 export type PlacedOrder = {
   id: number;
@@ -34,7 +34,7 @@ export class OrdersService {
 
       const close = order.type === 'MARKET' ? await this.orders.latestClose(query, order.instrumentId) : null;
       const history = await this.orders.findOrders(query, order.userId);
-      const available = cashAndShares(history.map(toTrade), order.instrumentId);
+      const available = cashAndShares(historyTrades(history), order.instrumentId);
       const decision = decideOrder(
         order,
         available.availableCashCents,
@@ -61,24 +61,6 @@ export class OrdersService {
         : { id, status: decision.status };
     });
   }
-}
-
-function toTrade(order: OrderRow): TradeOrder {
-  return {
-    instrumentId: order.instrumentId,
-    size: Number(order.size),
-    priceCents: toCents(order.price),
-    type: order.type,
-    side: order.side,
-    status: order.status,
-  };
-}
-
-function toCents(price: string): number {
-  const negative = price.startsWith('-');
-  const [whole, fraction = ''] = price.replace('-', '').split('.');
-  const cents = Number(whole) * 100 + Number((fraction + '00').slice(0, 2));
-  return negative ? -cents : cents;
 }
 
 function fromCents(cents: number): string {

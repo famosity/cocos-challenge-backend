@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { Sql } from '../database/database.service.js';
 
 export type OrderRow = {
-  instrumentId: number;
-  size: number;
-  price: string;
-  type: string;
-  side: string;
-  status: string;
+  instrumentId: number | null;
+  size: number | null;
+  price: string | null;
+  type: string | null;
+  side: string | null;
+  status: string | null;
 };
 
 @Injectable()

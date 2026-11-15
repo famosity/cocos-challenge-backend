@@ -171,6 +171,37 @@ describe('GET /users/:userId/portfolio', () => {
     });
   });
 
+  it('ignores a cancelled order and a rejected order when the price is null', async () => {
+    const instrumentId = await insertInstrument(database, 'P2NULL', '100.00');
+    await cashIn(database, 2, 1000);
+    await order(database, 2, instrumentId, 1, '100.00', 'BUY', 'FILLED', 'MARKET');
+    await orderWithoutPrice(database, 2, instrumentId, 'CANCELLED');
+    await orderWithoutPrice(database, 2, instrumentId, 'REJECTED');
+
+    const response = await request(app.getHttpServer()).get('/users/2/portfolio').expect(200);
+
+    expect(response.body).toMatchObject({
+      totalValue: '1000.00',
+      availableCash: '900.00',
+      positions: [{ instrumentId, ticker: 'P2NULL', quantity: 1, marketValue: '100.00' }],
+    });
+  });
+
+  it('returns 500 when a filled order has no price', async () => {
+    const instrumentId = await insertInstrument(database, 'P2BRK', '100.00');
+    await cashIn(database, 2, 1000);
+    await orderWithoutPrice(database, 2, instrumentId, 'FILLED');
+
+    const response = await request(app.getHttpServer()).get('/users/2/portfolio').expect(500);
+
+    expect(response.body).toEqual({
+      statusCode: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Error interno',
+      requestId: response.headers['x-request-id'],
+    });
+  });
+
   it('does not reserve a cancelled buy', async () => {
     await cashIn(database, 2, 1000);
     await order(database, 2, pesos, 5, '100.00', 'BUY', 'CANCELLED', 'LIMIT', pesos);
@@ -196,6 +227,19 @@ async function insertInstrument(database: DatabaseService, ticker: string, close
     ]);
   }
   return id;
+}
+
+async function orderWithoutPrice(
+  database: DatabaseService,
+  userId: number,
+  instrumentId: number,
+  status: string,
+): Promise<void> {
+  await database.query(
+    `INSERT INTO orders (instrumentid, userid, size, price, side, status, type, datetime)
+     VALUES ($1, $2, 1, NULL, 'BUY', $3, 'MARKET', '2020-01-01')`,
+    [instrumentId, userId, status],
+  );
 }
 
 async function cashIn(database: DatabaseService, userId: number, amount: number): Promise<void> {

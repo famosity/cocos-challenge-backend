@@ -224,6 +224,38 @@ describe('POST /orders', () => {
     expect(await saved(database, response.body.id)).toMatchObject({ price: '100.00', status: 'NEW' });
   });
 
+  it('decides a buy the same way when cancelled and rejected rows have no price', async () => {
+    const instrumentId = await insertInstrument(database, 'O2IGN', '100.00');
+    await cashIn(database, 1000);
+    await orderWithoutPrice(database, instrumentId, 'CANCELLED');
+    await orderWithoutPrice(database, instrumentId, 'REJECTED');
+
+    const response = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 });
+
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe('FILLED');
+    expect(await saved(database, response.body.id)).toMatchObject({ size: 1, price: '100.00', status: 'FILLED' });
+    expect((await portfolio(app)).availableCash).toBe('900.00');
+  });
+
+  it('returns 500 and writes nothing when a filled order has no price', async () => {
+    const instrumentId = await insertInstrument(database, 'O2BRK', '100.00');
+    await cashIn(database, 1000);
+    await orderWithoutPrice(database, instrumentId, 'FILLED');
+    const before = await countOrders(database);
+
+    const response = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      statusCode: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Error interno',
+      requestId: response.headers['x-request-id'],
+    });
+    expect(await countOrders(database)).toBe(before);
+  });
+
   it('returns 422 and writes nothing when the amount buys no shares or the close is missing', async () => {
     const priced = await insertInstrument(database, 'O2ZER', '100.00');
     const bare = await insertInstrument(database, 'O2NOC');
@@ -357,6 +389,14 @@ async function addClose(
     date,
     close,
   ]);
+}
+
+async function orderWithoutPrice(database: DatabaseService, instrumentId: number, status: string): Promise<void> {
+  await database.query(
+    `INSERT INTO orders (instrumentid, userid, size, price, side, status, type, datetime)
+     VALUES ($1, $2, 1, NULL, 'BUY', $3, 'MARKET', '2020-01-01')`,
+    [instrumentId, userId, status],
+  );
 }
 
 async function cashIn(database: DatabaseService, amount: number): Promise<void> {

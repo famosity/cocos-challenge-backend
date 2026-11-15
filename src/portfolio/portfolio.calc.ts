@@ -84,6 +84,49 @@ export function buildPortfolio(orders: TradeOrder[], quotes: Quote[]): Portfolio
   };
 }
 
+export type HistoryRow = {
+  instrumentId: number | null;
+  size: number | null;
+  price: string | null;
+  type: string | null;
+  side: string | null;
+  status: string | null;
+};
+
+export function historyTrades(rows: HistoryRow[]): TradeOrder[] {
+  const trades: TradeOrder[] = [];
+  for (const row of rows) {
+    const status = upper(row.status);
+    const side = upper(row.side);
+    const type = upper(row.type);
+    const filled = status === 'FILLED' && (side === 'BUY' || side === 'SELL' || side === 'CASH_IN' || side === 'CASH_OUT');
+    const reserved = status === 'NEW' && type === 'LIMIT' && (side === 'BUY' || side === 'SELL');
+    if (!filled && !reserved) continue;
+
+    const size = row.size;
+    if (typeof size !== 'number' || !Number.isInteger(size)) throw new Error('order history is missing size');
+    const instrumentId = row.instrumentId;
+    if ((side === 'BUY' || side === 'SELL') && (typeof instrumentId !== 'number' || !Number.isInteger(instrumentId))) {
+      throw new Error('order history is missing instrument');
+    }
+
+    const needsPrice = filled || side === 'BUY';
+    const priceCents = row.price === null ? null : centsOf(row.price);
+    if (priceCents === null && needsPrice) throw new Error('order history is missing price');
+    if (row.price !== null && priceCents === null) throw new Error('order history is missing price');
+
+    trades.push({
+      instrumentId: instrumentId ?? 0,
+      size,
+      priceCents: priceCents ?? 0,
+      type,
+      side,
+      status,
+    });
+  }
+  return trades;
+}
+
 export function usableCloseCents(price: string | null): number | null {
   if (price === null) return null;
   const match = /^(\d+)(?:\.(\d+))?$/.exec(price);
@@ -177,6 +220,19 @@ function bookOf(books: Map<number, Book>, instrumentId: number): Book {
   const created: Book = { qty: 0, avgNum: 0n, avgDen: 1n, sellReserved: 0 };
   books.set(instrumentId, created);
   return created;
+}
+
+function centsOf(price: string): number | null {
+  const negative = price.startsWith('-');
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(negative ? price.slice(1) : price);
+  if (!match?.[1]) return null;
+  const cents = Number(match[1]) * 100 + Number(((match[2] ?? '') + '00').slice(0, 2));
+  if (!Number.isFinite(cents)) return null;
+  return negative ? -cents : cents;
+}
+
+function upper(value: string | null): string {
+  return (value ?? '').toUpperCase();
 }
 
 function usableCents(cents: number | null): cents is number {

@@ -1,4 +1,11 @@
-import { availableToSell, buildPortfolio, usableCloseCents, type TradeOrder } from '../portfolio/portfolio.calc.js';
+import {
+  availableToSell,
+  buildPortfolio,
+  historyTrades,
+  usableCloseCents,
+  type HistoryRow,
+  type TradeOrder,
+} from '../portfolio/portfolio.calc.js';
 
 const cash = (size: number, priceCents = 100): TradeOrder => ({
   instrumentId: 66,
@@ -198,6 +205,57 @@ describe('buildPortfolio', () => {
   });
 });
 
+describe('historyTrades', () => {
+  it('drops a cancelled and a rejected row before reading a null price', () => {
+    const kept = [cashRow(1000), shareRow('BUY', 'FILLED', 'MARKET', '100.00')];
+    const noisy = [
+      ...kept,
+      shareRow('BUY', 'cancelled', 'LIMIT', null),
+      shareRow('SELL', 'REJECTED', 'MARKET', null),
+    ];
+
+    expect(historyTrades(noisy)).toEqual(historyTrades(kept));
+    expect(buildPortfolio(historyTrades(noisy), [quote(10, 'PAMP', 10_000)])).toEqual(
+      buildPortfolio(historyTrades(kept), [quote(10, 'PAMP', 10_000)]),
+    );
+  });
+
+  it('stops when a filled row is missing the price, the size or the instrument', () => {
+    expect(() => historyTrades([shareRow('BUY', 'FILLED', 'MARKET', null)])).toThrow('order history is missing price');
+    expect(() => historyTrades([{ ...shareRow('BUY', 'FILLED', 'MARKET', '100.00'), size: null }])).toThrow(
+      'order history is missing size',
+    );
+    expect(() => historyTrades([{ ...shareRow('SELL', 'FILLED', 'MARKET', '100.00'), instrumentId: null }])).toThrow(
+      'order history is missing instrument',
+    );
+  });
+
+  it('counts a filled limit once and keeps a short of 10', () => {
+    const filled = historyTrades([cashRow(1000), shareRow('BUY', 'FILLED', 'LIMIT', '100.00', 5)]);
+    const short = historyTrades([cashRow(4000), shareRow('SELL', 'FILLED', 'MARKET', '100.00', 10)]);
+
+    expect(buildPortfolio(filled, [quote(10, 'PAMP', 10_000)]).positions[0]).toMatchObject({
+      quantity: 5,
+      marketValue: '500.00',
+    });
+    expect(buildPortfolio(filled, [quote(10, 'PAMP', 10_000)]).availableCash).toBe('500.00');
+    expect(buildPortfolio(short, [quote(10, 'PAMP', 10_000)]).positions[0]).toMatchObject({
+      quantity: -10,
+      marketValue: '-1000.00',
+      totalReturnPct: null,
+    });
+  });
+
+  it('reserves a new limit sale when its price is null', () => {
+    const trades = historyTrades([
+      shareRow('BUY', 'FILLED', 'MARKET', '100.00', 10),
+      shareRow('SELL', 'NEW', 'LIMIT', null, 4),
+    ]);
+
+    expect(availableToSell(trades, 10)).toBe(6);
+  });
+});
+
 describe('usableCloseCents', () => {
   it('keeps a positive close and drops a missing, zero, negative or non numeric one', () => {
     expect(usableCloseCents('100.50')).toBe(10_050);
@@ -231,6 +289,14 @@ function buy(size: number, priceCents: number, status: string, type: string, ins
 
 function sell(size: number, priceCents: number, status: string, type: string, instrumentId = 10): TradeOrder {
   return { instrumentId, size, priceCents, type, side: 'SELL', status };
+}
+
+function shareRow(side: string, status: string, type: string, price: string | null, size = 1): HistoryRow {
+  return { instrumentId: 10, size, price, type, side, status };
+}
+
+function cashRow(size: number): HistoryRow {
+  return { instrumentId: 66, size, price: '1.00', type: 'MARKET', side: 'CASH_IN', status: 'FILLED' };
 }
 
 function quote(instrumentId: number, ticker: string, closeCents: number | null) {
