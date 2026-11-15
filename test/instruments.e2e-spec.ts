@@ -111,6 +111,17 @@ describe('GET /instruments', () => {
     });
   });
 
+  it('rejects a query that contains a null character', async () => {
+    const response = await request(app.getHttpServer()).get('/instruments?query=GG%00AL').expect(400);
+
+    expect(response.body).toMatchObject({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      details: [{ field: 'query', message: 'must not contain a null character' }],
+    });
+    expect(response.body.requestId).toBe(response.headers['x-request-id']);
+  });
+
   it('rejects a query that is only spaces', async () => {
     const response = await request(app.getHttpServer()).get('/instruments').query({ query: '   ' }).expect(400);
 

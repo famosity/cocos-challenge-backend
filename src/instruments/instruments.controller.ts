@@ -12,6 +12,9 @@ export class InstrumentsController {
     if (typeof query !== 'string') {
       throw validationError('query', query === undefined ? 'must not be empty' : 'must be a single text');
     }
+    if (query.includes('\0')) {
+      throw validationError('query', 'must not contain a null character');
+    }
     const term = query.trim();
     if (term.length === 0) {
       throw validationError('query', 'must not be empty');
