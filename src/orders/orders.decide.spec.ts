@@ -36,6 +36,21 @@ describe('decideOrder', () => {
     });
   });
 
+  it('stops before saving a market order when the close is zero, negative or not finite', () => {
+    for (const closeCents of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(decideOrder(buy({ quantity: 1 }), cash, 0, closeCents)).toEqual({
+        outcome: 'unprocessable',
+        code: 'QUOTE_UNAVAILABLE',
+      });
+    }
+  });
+
+  it('opens a limit order at its own price when the close cannot be used', () => {
+    const decision = decideOrder(buy({ quantity: 1, priceCents: close, type: 'LIMIT' }), cash, 0, 0);
+
+    expect(decision).toEqual({ outcome: 'accept', status: 'NEW', size: 1, priceCents: close });
+  });
+
   it('opens a limit buy as new and reserves the share cost', () => {
     const decision = decideOrder(buy({ quantity: 5, priceCents: close, type: 'LIMIT' }), cash, 0, null);
 

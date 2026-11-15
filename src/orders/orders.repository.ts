@@ -28,7 +28,7 @@ export class OrdersRepository {
     const rows = await query<{ close: string | null }>(
       `SELECT close::text AS close
        FROM marketdata
-       WHERE instrumentid = $1
+       WHERE instrumentid = $1 AND date IS NOT NULL
        ORDER BY date DESC, id DESC
        LIMIT 1`,
       [instrumentId],

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
-import { cashAndShares, type TradeOrder } from '../portfolio/portfolio.calc.js';
+import { cashAndShares, usableCloseCents, type TradeOrder } from '../portfolio/portfolio.calc.js';
 import { decideOrder } from './orders.decide.js';
 import type { ParsedOrder } from './orders.parse.js';
 import { OrdersRepository, type OrderRow } from './orders.repository.js';
@@ -39,7 +39,7 @@ export class OrdersService {
         order,
         available.availableCashCents,
         available.availableShares,
-        close === null ? null : toCents(close),
+        usableCloseCents(close),
       );
 
       if (decision.outcome === 'unprocessable') {

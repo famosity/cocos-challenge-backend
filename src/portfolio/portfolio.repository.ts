@@ -49,7 +49,7 @@ export class PortfolioRepository {
        LEFT JOIN (
          SELECT DISTINCT ON (instrumentid) instrumentid, close
          FROM marketdata
-         WHERE instrumentid = ANY($1::int[])
+         WHERE instrumentid = ANY($1::int[]) AND date IS NOT NULL
          ORDER BY instrumentid, date DESC, id DESC
        ) q ON q.instrumentid = i.id
        WHERE i.id = ANY($1::int[])`,

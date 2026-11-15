@@ -1,4 +1,4 @@
-import { availableToSell, buildPortfolio, type TradeOrder } from '../portfolio/portfolio.calc.js';
+import { availableToSell, buildPortfolio, usableCloseCents, type TradeOrder } from '../portfolio/portfolio.calc.js';
 
 const cash = (size: number, priceCents = 100): TradeOrder => ({
   instrumentId: 66,
@@ -152,6 +152,18 @@ describe('buildPortfolio', () => {
     expect(portfolio.positions[0]?.totalReturnPct).toBe(0.01);
   });
 
+  it('leaves the position value and the total empty when the close is zero or negative', () => {
+    const orders = [cash(1000), buy(4, 10_000, 'FILLED', 'MARKET')];
+
+    for (const closeCents of [0, -100, Number.NaN]) {
+      const portfolio = buildPortfolio(orders, [quote(10, 'PAMP', closeCents)]);
+
+      expect(portfolio.availableCash).toBe('600.00');
+      expect(portfolio.totalValue).toBeNull();
+      expect(portfolio.positions[0]).toMatchObject({ quantity: 4, marketValue: null, totalReturnPct: null });
+    }
+  });
+
   it('leaves the position value and the total empty when the close is missing', () => {
     const portfolio = buildPortfolio(
       [cash(1000), buy(1, 10_000, 'FILLED', 'MARKET'), buy(2, 5_000, 'FILLED', 'MARKET', 11)],
@@ -183,6 +195,18 @@ describe('buildPortfolio', () => {
 
     expect(portfolio.availableCash).toBe('969.97');
     expect(portfolio.positions[0]?.marketValue).toBe('30.03');
+  });
+});
+
+describe('usableCloseCents', () => {
+  it('keeps a positive close and drops a missing, zero, negative or non numeric one', () => {
+    expect(usableCloseCents('100.50')).toBe(10_050);
+    expect(usableCloseCents('100')).toBe(10_000);
+    expect(usableCloseCents(null)).toBeNull();
+    expect(usableCloseCents('0.00')).toBeNull();
+    expect(usableCloseCents('-1.50')).toBeNull();
+    expect(usableCloseCents('NaN')).toBeNull();
+    expect(usableCloseCents('Infinity')).toBeNull();
   });
 });
 

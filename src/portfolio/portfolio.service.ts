@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../common/app-error.js';
-import { buildPortfolio, type Portfolio, type Quote, type TradeOrder } from './portfolio.calc.js';
+import { buildPortfolio, usableCloseCents, type Portfolio, type Quote, type TradeOrder } from './portfolio.calc.js';
 import { PortfolioRepository, type OrderRow, type QuoteRow } from './portfolio.repository.js';
 
 @Injectable()
@@ -41,7 +41,7 @@ function toQuote(quote: QuoteRow): Quote {
   return {
     instrumentId: quote.instrumentId,
     ticker: quote.ticker,
-    closeCents: quote.close === null ? null : toCents(quote.close),
+    closeCents: usableCloseCents(quote.close),
   };
 }
 

@@ -57,14 +57,15 @@ export function buildPortfolio(orders: TradeOrder[], quotes: Quote[]): Portfolio
       marketValue: null,
       totalReturnPct: null,
     };
-    if (quote?.closeCents == null) {
+    const closeCents = quote?.closeCents ?? null;
+    if (!usableCents(closeCents)) {
       missingClose = true;
     } else {
-      const value = BigInt(book.qty) * BigInt(quote.closeCents);
+      const value = BigInt(book.qty) * BigInt(closeCents);
       position.marketValue = formatCents(value);
       totalCents += value;
       if (book.qty > 0 && book.avgNum !== 0n) {
-        const numerator = (BigInt(quote.closeCents) * book.avgDen - book.avgNum) * 100n;
+        const numerator = (BigInt(closeCents) * book.avgDen - book.avgNum) * 100n;
         position.totalReturnPct = roundRatio(numerator, book.avgNum);
       }
     }
@@ -81,6 +82,14 @@ export function buildPortfolio(orders: TradeOrder[], quotes: Quote[]): Portfolio
     availableCash: formatCents(cashCents - reservedBuyCents),
     positions,
   };
+}
+
+export function usableCloseCents(price: string | null): number | null {
+  if (price === null) return null;
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(price);
+  if (!match) return null;
+  const cents = Number(match[1]) * 100 + Number(((match[2] ?? '') + '00').slice(0, 2));
+  return usableCents(cents) ? cents : null;
 }
 
 export function availableToSell(orders: TradeOrder[], instrumentId: number): number {
@@ -168,6 +177,10 @@ function bookOf(books: Map<number, Book>, instrumentId: number): Book {
   const created: Book = { qty: 0, avgNum: 0n, avgDen: 1n, sellReserved: 0 };
   books.set(instrumentId, created);
   return created;
+}
+
+function usableCents(cents: number | null): cents is number {
+  return cents !== null && Number.isFinite(cents) && cents > 0;
 }
 
 function formatCents(cents: bigint): string {

@@ -28,6 +28,10 @@ export function decideOrder(
   availableShares: number,
   closeCents: number | null,
 ): OrderDecision {
+  if (order.type === 'MARKET' && !usableCents(closeCents)) {
+    return { outcome: 'unprocessable', code: 'QUOTE_UNAVAILABLE' };
+  }
+
   const priceCents = order.type === 'MARKET' ? closeCents : (order.priceCents ?? null);
   if (priceCents === null) {
     return { outcome: 'unprocessable', code: 'QUOTE_UNAVAILABLE' };
@@ -49,6 +53,10 @@ export function decideOrder(
   }
 
   return { outcome: 'accept', status, size, priceCents };
+}
+
+function usableCents(cents: number | null): cents is number {
+  return cents !== null && Number.isFinite(cents) && cents > 0;
 }
 
 function sharesFor(amountCents: bigint, priceCents: number): number {

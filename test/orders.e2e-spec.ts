@@ -130,6 +130,100 @@ describe('POST /orders', () => {
     expect((await portfolio(app)).positions[0]).toMatchObject({ quantity: -4, marketValue: '-400.00' });
   });
 
+  it('fills a market buy at the dated close and ignores an undated row', async () => {
+    const instrumentId = await insertInstrument(database, 'O2DAT');
+    await addClose(database, instrumentId, null, '0.00');
+    await addClose(database, instrumentId, '2024-01-02', '100.00');
+    await cashIn(database, 1000);
+
+    const response = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 });
+
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe('FILLED');
+    expect(await saved(database, response.body.id)).toMatchObject({ price: '100.00', status: 'FILLED' });
+    expect(await portfolio(app)).toMatchObject({
+      availableCash: '900.00',
+      totalValue: '1000.00',
+      positions: [expect.objectContaining({ quantity: 1, marketValue: '100.00', totalReturnPct: 0 })],
+    });
+  });
+
+  it('uses the higher id when two closes share the same date', async () => {
+    const instrumentId = await insertInstrument(database, 'O2TIE');
+    await addClose(database, instrumentId, '2024-01-02', '50.00');
+    await addClose(database, instrumentId, '2024-01-02', '120.00');
+    await cashIn(database, 1000);
+
+    const response = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 });
+
+    expect(response.body.status).toBe('FILLED');
+    expect(await saved(database, response.body.id)).toMatchObject({ price: '120.00' });
+    expect((await portfolio(app)).positions[0]).toMatchObject({ marketValue: '120.00' });
+  });
+
+  it('returns 422 and leaves the holding unvalued when the latest dated close is zero', async () => {
+    const instrumentId = await insertInstrument(database, 'O2ZER2');
+    await addClose(database, instrumentId, '2024-01-01', '80.00');
+    await addClose(database, instrumentId, '2024-01-02', '0.00');
+    await addClose(database, instrumentId, null, '200.00');
+    await cashIn(database, 1000);
+    await seedOrder(database, instrumentId, 4, '100.00', 'BUY', 'FILLED', 'MARKET');
+    const before = await countOrders(database);
+
+    const response = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 });
+
+    expect(response.status).toBe(422);
+    expect(response.body).toMatchObject({ code: 'QUOTE_UNAVAILABLE' });
+    expect(await countOrders(database)).toBe(before);
+    expect(await portfolio(app)).toMatchObject({
+      availableCash: '600.00',
+      totalValue: null,
+      positions: [expect.objectContaining({ quantity: 4, marketValue: null, totalReturnPct: null })],
+    });
+  });
+
+  it('returns 422 when the latest dated close is missing or negative', async () => {
+    const missing = await insertInstrument(database, 'O2NUL');
+    await addClose(database, missing, '2024-01-01', '40.00');
+    await addClose(database, missing, '2024-01-02', null);
+    const negative = await insertInstrument(database, 'O2NEG');
+    await addClose(database, negative, '2024-01-01', '40.00');
+    await addClose(database, negative, '2024-01-02', '-1.00');
+    await cashIn(database, 1000);
+    await seedOrder(database, missing, 1, '100.00', 'BUY', 'FILLED', 'MARKET');
+    await seedOrder(database, negative, 1, '100.00', 'BUY', 'FILLED', 'MARKET');
+    const before = await countOrders(database);
+
+    const missingClose = await post(app, { instrumentId: missing, side: 'BUY', type: 'MARKET', quantity: 1 });
+    const negativeClose = await post(app, { instrumentId: negative, side: 'SELL', type: 'MARKET', quantity: 1 });
+
+    expect(missingClose.status).toBe(422);
+    expect(missingClose.body.code).toBe('QUOTE_UNAVAILABLE');
+    expect(negativeClose.status).toBe(422);
+    expect(negativeClose.body.code).toBe('QUOTE_UNAVAILABLE');
+    expect(await countOrders(database)).toBe(before);
+    const account = await portfolio(app);
+    expect(account.totalValue).toBeNull();
+    expect(account.availableCash).toBe('800.00');
+    expect(account.positions).toEqual([
+      expect.objectContaining({ ticker: 'O2NEG', quantity: 1, marketValue: null }),
+      expect.objectContaining({ ticker: 'O2NUL', quantity: 1, marketValue: null }),
+    ]);
+  });
+
+  it('opens a limit buy at the given price when the latest close is zero', async () => {
+    const instrumentId = await insertInstrument(database, 'O2LIM0');
+    await addClose(database, instrumentId, '2024-01-01', '80.00');
+    await addClose(database, instrumentId, '2024-01-02', '0.00');
+    await cashIn(database, 1000);
+
+    const response = await post(app, { instrumentId, side: 'BUY', type: 'LIMIT', quantity: 1, price: '100.00' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe('NEW');
+    expect(await saved(database, response.body.id)).toMatchObject({ price: '100.00', status: 'NEW' });
+  });
+
   it('returns 422 and writes nothing when the amount buys no shares or the close is missing', async () => {
     const priced = await insertInstrument(database, 'O2ZER', '100.00');
     const bare = await insertInstrument(database, 'O2NOC');
@@ -222,8 +316,15 @@ function post(
 }
 
 async function portfolio(app: INestApplication<App>): Promise<{
+  totalValue: string | null;
   availableCash: string;
-  positions: Array<{ instrumentId: number; ticker: string; quantity: number; marketValue: string }>;
+  positions: Array<{
+    instrumentId: number;
+    ticker: string;
+    quantity: number;
+    marketValue: string | null;
+    totalReturnPct: number | null;
+  }>;
 }> {
   const response = await request(app.getHttpServer()).get(`/users/${userId}/portfolio`).expect(200);
   return response.body;
@@ -243,6 +344,19 @@ async function insertInstrument(database: DatabaseService, ticker: string, close
     ]);
   }
   return id;
+}
+
+async function addClose(
+  database: DatabaseService,
+  instrumentId: number,
+  date: string | null,
+  close: string | null,
+): Promise<void> {
+  await database.query(`INSERT INTO marketdata (instrumentid, date, close) VALUES ($1, $2, $3)`, [
+    instrumentId,
+    date,
+    close,
+  ]);
 }
 
 async function cashIn(database: DatabaseService, amount: number): Promise<void> {
