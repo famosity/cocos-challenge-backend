@@ -1,6 +1,6 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, Logger } from '@nestjs/common';
 import type { Response } from 'express';
-import { currentRequestId } from './request-context.js';
+import { currentRequestId, REQUEST_ID_HEADER } from './request-context.js';
 import { toErrorBody } from './http-error.js';
 
 @Catch()
@@ -28,6 +28,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
 }
 
 function headerOf(response: Response): string {
-  const value = response.getHeader('X-Request-Id');
+  const value = response.getHeader(REQUEST_ID_HEADER);
   return typeof value === 'string' ? value : '';
 }

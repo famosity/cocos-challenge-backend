@@ -1,6 +1,6 @@
 # Notas técnicas
 
-El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Hay tres rutas: `GET /instruments`, `GET /users/:userId/portfolio` y `POST /orders`.
+El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Hay tres rutas: `GET /instruments`, `GET /users/:userId/portfolio` y `POST /orders`. El efectivo disponible y las acciones libres se calculan una sola vez, en `src/account`, y las usan la cartera y las órdenes. La valuación y el rendimiento quedan en la cartera. Un error de validación ya trae el campo en `details`. El formateador HTTP sigue leyendo el texto de las excepciones de Nest.
 
 La base de la API es un PostgreSQL local. `DATABASE_URL` apunta ahí. Neon queda en `NEON_DATABASE_URL` y no se usa para escribir. Las suites que escriben leen `TEST_DATABASE_URL` y no usan la URL de la aplicación. Si esa variable no está o queda vacía, se detienen antes de preparar datos. En `.env.example` queda vacía: la base de las pruebas es otra, separada de la de desarrollo. Para levantar la base: `npm run db:up`. Docker crea el contenedor y carga `database.sql`, que trae el esquema y los datos de prueba. `npm run test:db` comprueba la conexión: hay 4 usuarios y filas en instrumentos, órdenes y cotizaciones. `npm run db:reset` borra el volumen y vuelve a cargar el archivo. El ejemplo de la URL de desarrollo está en `.env.example`.
 
@@ -17,7 +17,7 @@ Un id que no es un entero positivo responde 400. Un usuario que no existe respon
 
 Cada solicitud recibe un id. Sale en el header `X-Request-Id`. Si la respuesta es un error, el mismo id va en el cuerpo. Al terminar se escribe una línea JSON con el método, la ruta, el estado HTTP y la duración.
 
-Un dato inválido responde 400, con código `VALIDATION_ERROR`. `details` nombra el campo. Para el texto "amount must be a positive number", el campo es `amount` y el mensaje es el resto.
+Las validaciones propias responden 400 con el código `VALIDATION_ERROR` y declaran explícitamente `field` y `message` en cada elemento de `details`. Si NestJS emite una excepción de solicitud inválida sin esos detalles estructurados, el formateador usa la primera palabra del mensaje como campo cuando tiene un formato válido y usa `body` como campo por defecto.
 
 Un fallo que no estaba previsto responde 500. El mensaje público es "Error interno" y lleva el `requestId`. La causa y el stack se escriben una sola vez, en un log de nivel error. No vuelven en el JSON.
 

@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { AppError } from '../common/app-error.js';
+import { cashAndShares, historyTrades } from '../account/account-availability.js';
+import { usableCloseCents } from '../account/usable-close.js';
+import { AppError, userNotFound } from '../common/app-error.js';
 import { DatabaseService } from '../database/database.service.js';
-import { cashAndShares, historyTrades, usableCloseCents } from '../portfolio/portfolio.calc.js';
 import { decideOrder } from './orders.decide.js';
 import type { ParsedOrder } from './orders.parse.js';
 import { OrdersRepository } from './orders.repository.js';
@@ -28,7 +29,7 @@ export class OrdersService {
   place(order: ParsedOrder): Promise<PlacedOrder> {
     return this.database.transaction(async (query) => {
       const user = await this.orders.lockUser(query, order.userId);
-      if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'El usuario no existe');
+      if (!user) throw userNotFound();
 
       const instrumentType = await this.orders.instrumentType(query, order.instrumentId);
       if (instrumentType === null) throw new AppError(404, 'INSTRUMENT_NOT_FOUND', 'El instrumento no existe');

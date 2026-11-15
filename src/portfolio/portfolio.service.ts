@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { AppError } from '../common/app-error.js';
-import { buildPortfolio, historyTrades, usableCloseCents, type Portfolio, type Quote } from './portfolio.calc.js';
+import { historyTrades } from '../account/account-availability.js';
+import { usableCloseCents } from '../account/usable-close.js';
+import { userNotFound } from '../common/app-error.js';
+import { buildPortfolio, type Portfolio, type Quote } from './portfolio.calc.js';
 import { PortfolioRepository, type QuoteRow } from './portfolio.repository.js';
 
 @Injectable()
@@ -10,7 +12,7 @@ export class PortfolioService {
   async get(userId: number): Promise<Portfolio> {
     const exists = await this.portfolio.exists(userId);
     if (!exists) {
-      throw new AppError(404, 'USER_NOT_FOUND', 'El usuario no existe');
+      throw userNotFound();
     }
 
     const trades = historyTrades(await this.portfolio.findOrders(userId));

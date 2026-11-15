@@ -1,3 +1,6 @@
+import { isUsableCloseCents } from '../account/usable-close.js';
+import { PG_INT4_MAX } from '../database/postgres-limits.js';
+
 export type OrderRequest = {
   side: 'BUY' | 'SELL';
   type: 'MARKET' | 'LIMIT';
@@ -28,7 +31,7 @@ export function decideOrder(
   availableShares: number,
   closeCents: number | null,
 ): OrderDecision {
-  if (order.type === 'MARKET' && !usableCents(closeCents)) {
+  if (order.type === 'MARKET' && !isUsableCloseCents(closeCents)) {
     return { outcome: 'unprocessable', code: 'QUOTE_UNAVAILABLE' };
   }
 
@@ -41,7 +44,7 @@ export function decideOrder(
   if (sizeBig === 0n) {
     return { outcome: 'unprocessable', code: 'ZERO_ORDER_QUANTITY' };
   }
-  if (sizeBig > maxSize) {
+  if (sizeBig > PG_INT4_MAX) {
     return { outcome: 'unprocessable', code: 'ORDER_QUANTITY_OUT_OF_RANGE' };
   }
   const size = Number(sizeBig);
@@ -58,12 +61,6 @@ export function decideOrder(
 
   return { outcome: 'accept', status, size, priceCents };
 }
-
-function usableCents(cents: number | null): cents is number {
-  return cents !== null && Number.isFinite(cents) && cents > 0;
-}
-
-const maxSize = 2_147_483_647n;
 
 function sharesFor(amountCents: bigint, priceCents: number): bigint {
   if (priceCents <= 0) return 0n;
