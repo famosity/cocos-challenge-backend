@@ -5,6 +5,7 @@ import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { DatabaseService } from '../src/database/database.service.js';
+import { OrdersRepository } from '../src/orders/orders.repository.js';
 import { useTestDatabase } from './use-test-database.js';
 
 useTestDatabase();
@@ -414,6 +415,61 @@ describe('POST /orders', () => {
       await Promise.allSettled([pending]);
     }
   }, 15_000);
+
+  it('records the later sale after the buy that acquired the user lock first', async () => {
+    const instrumentId = await insertInstrument(database, 'O2SEQ', '200.00');
+    await cashIn(database, 3000);
+    await seedOrder(database, instrumentId, 10, '100.00', 'BUY', 'FILLED', 'MARKET');
+    const sellPaused = signal();
+    const sellMayContinue = signal();
+    const repository = app.get(OrdersRepository);
+    const lockUser = repository.lockUser.bind(repository);
+    const lockSpy = vi.spyOn(repository, 'lockUser').mockImplementationOnce(async (query, id) => {
+      sellPaused.resolve();
+      await sellMayContinue.promise;
+      return lockUser(query, id);
+    });
+    const sellPending = post(app, { instrumentId, side: 'SELL', type: 'MARKET', quantity: 10 }).then(
+      (response) => response,
+    );
+
+    try {
+      await Promise.race([
+        sellPaused.promise,
+        sellPending.then(() => {
+          throw new Error('Sale finished before reaching the user lock');
+        }),
+      ]);
+      const buy = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', quantity: 10 });
+      sellMayContinue.resolve();
+      const sell = await sellPending;
+      const history = await database.query<{ side: string; status: string }>(
+        `SELECT side, status
+         FROM orders
+         WHERE userid = $1 AND instrumentid = $2
+         ORDER BY datetime ASC, id ASC`,
+        [userId, instrumentId],
+      );
+
+      expect(buy.status).toBe(201);
+      expect(buy.body.status).toBe('FILLED');
+      expect(sell.status).toBe(201);
+      expect(sell.body.status).toBe('FILLED');
+      expect(history.map((row) => `${row.side} ${row.status}`)).toEqual(['BUY FILLED', 'BUY FILLED', 'SELL FILLED']);
+      expect((await portfolio(app)).positions).toEqual([
+        expect.objectContaining({
+          instrumentId,
+          quantity: 10,
+          marketValue: '2000.00',
+          totalReturnPct: 33.33,
+        }),
+      ]);
+    } finally {
+      sellMayContinue.resolve();
+      lockSpy.mockRestore();
+      await Promise.allSettled([sellPending]);
+    }
+  }, 15_000);
 });
 
 function post(
@@ -515,6 +571,14 @@ async function saved(database: DatabaseService, id: number): Promise<{ size: num
 async function countOrders(database: DatabaseService): Promise<number> {
   const rows = await database.query<{ n: number }>(`SELECT count(*)::int AS n FROM orders WHERE userid = $1`, [userId]);
   return rows[0]?.n ?? 0;
+}
+
+function signal(): { promise: Promise<void>; resolve: () => void } {
+  let resolve = (): void => undefined;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 async function waitFor(ready: () => Promise<boolean>): Promise<void> {

@@ -65,7 +65,7 @@ export class OrdersRepository {
   ): Promise<number> {
     const rows = await query<{ id: number }>(
       `INSERT INTO orders (instrumentid, userid, size, price, side, type, status, datetime)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, statement_timestamp())
        RETURNING id`,
       [order.instrumentId, order.userId, order.size, order.price, order.side, order.type, order.status],
     );
