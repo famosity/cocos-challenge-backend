@@ -1,17 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { DatabaseService } from '../src/database/database.service.js';
-import { loadEnvFile } from '../src/load-env.js';
+import { useTestDatabase } from './use-test-database.js';
 
-loadEnvFile();
+useTestDatabase();
 
 describe('local database', () => {
   const database = new DatabaseService();
-
-  beforeAll(() => {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL is not set. Start the local Postgres and point DATABASE_URL at it.');
-    }
-  });
 
   it('connects and reads the users loaded from database.sql', async () => {
     const rows = await database.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM users');

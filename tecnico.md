@@ -2,7 +2,7 @@
 
 El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Hay tres rutas: `GET /instruments`, `GET /users/:userId/portfolio` y `POST /orders`.
 
-La base de la API es un PostgreSQL local. `DATABASE_URL` apunta ahí. Neon queda en `NEON_DATABASE_URL` y no se usa para escribir. Para levantar la base: `npm run db:up`. Docker crea el contenedor y carga `database.sql`, que trae el esquema y los datos de prueba. `npm run test:db` comprueba la conexión: hay 4 usuarios y filas en instrumentos, órdenes y cotizaciones. `npm run db:reset` borra el volumen y vuelve a cargar el archivo. El ejemplo de la URL local está en `.env.example`.
+La base de la API es un PostgreSQL local. `DATABASE_URL` apunta ahí. Neon queda en `NEON_DATABASE_URL` y no se usa para escribir. Las suites que escriben leen `TEST_DATABASE_URL` y no usan la URL de la aplicación. Si esa variable no está o queda vacía, se detienen antes de preparar datos. En `.env.example` queda vacía: la base de las pruebas es otra, separada de la de desarrollo. Para levantar la base: `npm run db:up`. Docker crea el contenedor y carga `database.sql`, que trae el esquema y los datos de prueba. `npm run test:db` comprueba la conexión: hay 4 usuarios y filas en instrumentos, órdenes y cotizaciones. `npm run db:reset` borra el volumen y vuelve a cargar el archivo. El ejemplo de la URL de desarrollo está en `.env.example`.
 
 `GET /users/:userId/portfolio` devuelve `totalValue`, `availableCash` y `positions`. Los importes salen como texto con dos decimales, por ejemplo `"500.00"`. `totalReturnPct` es un número con dos decimales, o `null` cuando la tenencia es negativa o falta el costo o el cierre.
 

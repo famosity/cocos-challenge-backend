@@ -1,14 +1,14 @@
 import { Test } from '@nestjs/testing';
 import type { INestApplicationContext } from '@nestjs/common';
 import { DatabaseService } from '../src/database/database.service.js';
-import { loadEnvFile } from '../src/load-env.js';
+import { useTestDatabase } from './use-test-database.js';
 import { OrdersRepository } from '../src/orders/orders.repository.js';
 import { OrdersService } from '../src/orders/orders.service.js';
 import { OrdersModule } from '../src/orders/orders.module.js';
 import { PortfolioService } from '../src/portfolio/portfolio.service.js';
 import { PortfolioModule } from '../src/portfolio/portfolio.module.js';
 
-loadEnvFile();
+useTestDatabase();
 
 const userId = 3;
 const pesos = 66;
@@ -21,7 +21,6 @@ describe('order transaction', () => {
   let repository: OrdersRepository;
 
   beforeAll(async () => {
-    if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
     const moduleRef = await Test.createTestingModule({
       imports: [OrdersModule, PortfolioModule],
     }).compile();

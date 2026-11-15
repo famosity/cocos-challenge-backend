@@ -4,9 +4,9 @@ import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { DatabaseService } from '../src/database/database.service.js';
-import { loadEnvFile } from '../src/load-env.js';
+import { useTestDatabase } from './use-test-database.js';
 
-loadEnvFile();
+useTestDatabase();
 
 const pesos = 66;
 
@@ -15,9 +15,6 @@ describe('GET /users/:userId/portfolio', () => {
   let database: DatabaseService;
 
   beforeAll(async () => {
-    if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL is not set');
-    }
     const moduleFixture = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();

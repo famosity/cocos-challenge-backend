@@ -4,6 +4,9 @@ import type { LoggerService } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
+import { useTestDatabase } from './use-test-database.js';
+
+useTestDatabase();
 
 @Controller('probe')
 class ProbeController {

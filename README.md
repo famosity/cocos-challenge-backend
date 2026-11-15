@@ -37,10 +37,32 @@ La base local se levanta con Docker:
 
 ```bash
 $ npm run db:up
+```
+
+Copia `.env.example` a `.env`. `DATABASE_URL` es la base de desarrollo. `npm run db:up` la levanta y `npm run db:reset` vuelve a cargar `database.sql`.
+
+`TEST_DATABASE_URL` queda vacía en el ejemplo. `npm run test:db`, `npm run test:e2e`, `npm run test:integration` y `npm run test:all` la exigen. Si está vacía o no está, esas suites se detienen antes de escribir, aunque `DATABASE_URL` tenga valor.
+
+Las pruebas usan otra base, en el mismo PostgreSQL local, para no escribir en la de desarrollo:
+
+```bash
+$ docker compose exec postgres psql -U cocos -d cocos -c "CREATE DATABASE cocos_test;"
+$ docker compose exec postgres psql -U cocos -d cocos_test -f /docker-entrypoint-initdb.d/01-database.sql
+```
+
+En `.env`:
+
+```
+TEST_DATABASE_URL=postgresql://cocos:cocos@localhost:5432/cocos_test
+```
+
+Verificá la conexión a la base de pruebas:
+
+```bash
 $ npm run test:db
 ```
 
-Copia `.env.example` a `.env` si todavía no tienes `DATABASE_URL`. `npm run db:reset` vuelve a cargar `database.sql`.
+Para descartarla y crearla de nuevo, conectado a `cocos`: `DROP DATABASE cocos_test;` y repetir los dos comandos.
 
 Un `POST /orders` es una solicitud nueva. Si el cliente pierde la respuesta y la reenvía, puede crearse otra orden mientras haya pesos o acciones disponibles.
 
