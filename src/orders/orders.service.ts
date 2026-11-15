@@ -15,6 +15,7 @@ export type PlacedOrder = {
 const unprocessableMessage = {
   ZERO_ORDER_QUANTITY: 'El monto no alcanza para una acción',
   QUOTE_UNAVAILABLE: 'No hay cotización disponible',
+  ORDER_QUANTITY_OUT_OF_RANGE: 'La cantidad supera el máximo permitido',
 } as const;
 
 @Injectable()

@@ -21,14 +21,14 @@ Un dato inválido responde 400, con código `VALIDATION_ERROR`. `details` nombra
 
 Un fallo que no estaba previsto responde 500. El mensaje público es "Error interno" y lleva el `requestId`. La causa y el stack se escriben una sola vez, en un log de nivel error. No vuelven en el JSON.
 
-`POST /orders` crea una orden nueva cada vez. Si el cliente no recibe la respuesta y vuelve a enviarla, puede aparecer otra fila mientras todavía haya disponibilidad. La transacción arranca en `READ COMMITTED`, bloquea `users.id` con `SELECT ... FOR UPDATE` y recién después lee el efectivo y las acciones libres. Una `MARKET` válida queda `FILLED` al último cierre. Una `LIMIT` válida queda `NEW`. Si faltan pesos o acciones, la fila se guarda igual, en `REJECTED`, con `INSUFFICIENT_FUNDS` o `INSUFFICIENT_SHARES`. Un monto que no alcanza para una acción responde 422 con `ZERO_ORDER_QUANTITY` y no inserta. Una `MARKET` sin cierre utilizable responde 422 con `QUOTE_UNAVAILABLE` y tampoco inserta. Cero, negativo o no finito cuentan como cierre inutilizable, aunque haya uno anterior positivo. Una `LIMIT` usa el precio enviado. Una compra por $950 a $100 toma 9 acciones y deja el resto afuera. Si el monto pedido supera el efectivo, se rechaza aunque el importe redondeado entre.
+`POST /orders` crea una orden nueva cada vez. Si el cliente no recibe la respuesta y vuelve a enviarla, puede aparecer otra fila mientras todavía haya disponibilidad. La transacción arranca en `READ COMMITTED`, bloquea `users.id` con `SELECT ... FOR UPDATE` y recién después lee el efectivo y las acciones libres. Una `MARKET` válida queda `FILLED` al último cierre. Una `LIMIT` válida queda `NEW`. Si faltan pesos o acciones, la fila se guarda igual, en `REJECTED`, con `INSUFFICIENT_FUNDS` o `INSUFFICIENT_SHARES`. Un monto que no alcanza para una acción responde 422 con `ZERO_ORDER_QUANTITY` y no inserta. Un precio `LIMIT` mayor a `99999999.99` responde 400 sobre el campo `price`. Si el monto calcula más de `2147483647` acciones, responde 422 con `ORDER_QUANTITY_OUT_OF_RANGE` y no inserta. Una `MARKET` sin cierre utilizable responde 422 con `QUOTE_UNAVAILABLE` y tampoco inserta. Cero, negativo o no finito cuentan como cierre inutilizable, aunque haya uno anterior positivo. Una `LIMIT` usa el precio enviado. Una compra por $950 a $100 toma 9 acciones y deja el resto afuera. Si el monto pedido supera el efectivo, se rechaza aunque el importe redondeado entre.
 
-Los errores conocidos usan `AppError`, con estado, código y mensaje. La cartera lanza `USER_NOT_FOUND`. Las órdenes lanzan ese código, `INSTRUMENT_NOT_FOUND`, `ZERO_ORDER_QUANTITY` y `QUOTE_UNAVAILABLE`.
+Los errores conocidos usan `AppError`, con estado, código y mensaje. La cartera lanza `USER_NOT_FOUND`. Las órdenes lanzan ese código, `INSTRUMENT_NOT_FOUND`, `ZERO_ORDER_QUANTITY`, `QUOTE_UNAVAILABLE` y `ORDER_QUANTITY_OUT_OF_RANGE`.
 
 El envío de una orden sigue este orden:
  -El controller valida el cuerpo antes de tocar la base. 
  -El service abre la transacción, bloquea al usuario y solo después lee el cierre y las órdenes previas. 
- -Si el monto no compra una acción, o la orden es `MARKET` y no hay cierre, hace rollback y responde 422. 
+ -Si el monto no compra una acción, la cantidad no entra en la columna, o la orden es `MARKET` y no hay cierre, hace rollback y responde 422. 
  -Si faltan pesos o acciones, inserta `REJECTED` y confirma. 
  -Si alcanza, inserta `FILLED` o `NEW` y confirma. Una excepción a mitad de camino también hace rollback.
 
@@ -44,7 +44,7 @@ sequenceDiagram
     S->>DB: BEGIN READ COMMITTED
     S->>DB: SELECT users.id FOR UPDATE
     S->>DB: Leer instrumento, cierre y órdenes
-    alt Sin cierre o cantidad cero
+    alt Sin cierre, cantidad cero o fuera de rango
         S->>DB: ROLLBACK
         C-->>U: 422
     else Faltan pesos o acciones

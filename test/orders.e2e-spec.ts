@@ -272,6 +272,60 @@ describe('POST /orders', () => {
     expect(await countOrders(database)).toBe(before);
   });
 
+  it('rejects a limit price above the column maximum and still rejects a price that fits when the cash does not', async () => {
+    const instrumentId = await insertInstrument(database, 'O2PRC', '100.00');
+    await cashIn(database, 1000);
+    const before = await countOrders(database);
+
+    const tooHigh = await post(app, {
+      instrumentId,
+      side: 'BUY',
+      type: 'LIMIT',
+      quantity: 1,
+      price: '100000000.00',
+    });
+
+    expect(tooHigh.status).toBe(400);
+    expect(tooHigh.body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: [{ field: 'price', message: 'must be at most 99999999.99' }],
+    });
+    expect(await countOrders(database)).toBe(before);
+
+    const atMax = await post(app, {
+      instrumentId,
+      side: 'BUY',
+      type: 'LIMIT',
+      quantity: 1,
+      price: '99999999.99',
+    });
+
+    expect(atMax.status).toBe(201);
+    expect(atMax.body).toMatchObject({ status: 'REJECTED', reason: 'INSUFFICIENT_FUNDS' });
+    expect(await saved(database, atMax.body.id)).toMatchObject({
+      size: 1,
+      price: '99999999.99',
+      status: 'REJECTED',
+    });
+  });
+
+  it('rejects an amount that would buy more shares than the column allows', async () => {
+    const instrumentId = await insertInstrument(database, 'O2QTY', '1.00');
+    const before = await countOrders(database);
+
+    const tooMany = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', amount: '2147483648.00' });
+
+    expect(tooMany.status).toBe(422);
+    expect(tooMany.body).toMatchObject({ code: 'ORDER_QUANTITY_OUT_OF_RANGE' });
+    expect(await countOrders(database)).toBe(before);
+
+    const atMax = await post(app, { instrumentId, side: 'BUY', type: 'MARKET', amount: '2147483647.00' });
+
+    expect(atMax.status).toBe(201);
+    expect(atMax.body).toMatchObject({ status: 'REJECTED', reason: 'INSUFFICIENT_FUNDS' });
+    expect(await saved(database, atMax.body.id)).toMatchObject({ size: 2147483647, price: '1.00', status: 'REJECTED' });
+  });
+
   it('returns 404 for an unknown user or instrument and 400 for a bad body', async () => {
     const instrumentId = await insertInstrument(database, 'O2BAD', '100.00');
 

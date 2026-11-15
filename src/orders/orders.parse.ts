@@ -3,6 +3,7 @@ import type { OrderRequest } from './orders.decide.js';
 
 const money = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 const maxInt = 2147483647;
+const maxPriceCents = 9_999_999_999n;
 
 export type ParsedOrder = OrderRequest & {
   userId: number;
@@ -37,7 +38,9 @@ function priceOf(value: unknown, type: 'MARKET' | 'LIMIT'): number | undefined {
     return undefined;
   }
   if (value === undefined) throw new BadRequestException(['price must be a positive decimal']);
-  return Number(moneyCents(value, 'price'));
+  const cents = moneyCents(value, 'price');
+  if (cents > maxPriceCents) throw new BadRequestException(['price must be at most 99999999.99']);
+  return Number(cents);
 }
 
 function positiveInt(value: unknown, field: string): number {

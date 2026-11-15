@@ -41,6 +41,21 @@ describe('parseOrder', () => {
     expect(() => parseOrder({ ...valid, type: 'LIMIT', amount: undefined, quantity: 1 })).toThrow(BadRequestException);
   });
 
+  it('accepts the largest limit price and rejects the next cent', () => {
+    const limit = { ...valid, type: 'LIMIT', amount: undefined, quantity: 1 };
+
+    expect(parseOrder({ ...limit, price: '99999999.99' }).priceCents).toBe(9_999_999_999);
+    expect(() => parseOrder({ ...limit, price: '100000000.00' })).toThrow(BadRequestException);
+    try {
+      parseOrder({ ...limit, price: '100000000.00' });
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as BadRequestException).getResponse()).toMatchObject({
+        message: ['price must be at most 99999999.99'],
+      });
+    }
+  });
+
   it('rejects amounts that are not positive decimals with at most two places', () => {
     expect(parseOrder({ ...valid, amount: '10' }).amountCents).toBe(1_000n);
     expect(parseOrder({ ...valid, amount: '10.5' }).amountCents).toBe(1_050n);

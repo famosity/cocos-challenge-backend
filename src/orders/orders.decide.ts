@@ -7,7 +7,7 @@ export type OrderRequest = {
 };
 
 export type OrderDecision =
-  | { outcome: 'unprocessable'; code: 'ZERO_ORDER_QUANTITY' | 'QUOTE_UNAVAILABLE' }
+  | { outcome: 'unprocessable'; code: 'ZERO_ORDER_QUANTITY' | 'QUOTE_UNAVAILABLE' | 'ORDER_QUANTITY_OUT_OF_RANGE' }
   | {
       outcome: 'accept';
       status: 'FILLED' | 'NEW';
@@ -37,10 +37,14 @@ export function decideOrder(
     return { outcome: 'unprocessable', code: 'QUOTE_UNAVAILABLE' };
   }
 
-  const size = order.quantity ?? sharesFor(order.amountCents ?? 0n, priceCents);
-  if (size === 0) {
+  const sizeBig = order.quantity === undefined ? sharesFor(order.amountCents ?? 0n, priceCents) : BigInt(order.quantity);
+  if (sizeBig === 0n) {
     return { outcome: 'unprocessable', code: 'ZERO_ORDER_QUANTITY' };
   }
+  if (sizeBig > maxSize) {
+    return { outcome: 'unprocessable', code: 'ORDER_QUANTITY_OUT_OF_RANGE' };
+  }
+  const size = Number(sizeBig);
 
   const status = order.type === 'MARKET' ? 'FILLED' : 'NEW';
   if (order.side === 'BUY') {
@@ -59,7 +63,9 @@ function usableCents(cents: number | null): cents is number {
   return cents !== null && Number.isFinite(cents) && cents > 0;
 }
 
-function sharesFor(amountCents: bigint, priceCents: number): number {
-  if (priceCents <= 0) return 0;
-  return Number(amountCents / BigInt(priceCents));
+const maxSize = 2_147_483_647n;
+
+function sharesFor(amountCents: bigint, priceCents: number): bigint {
+  if (priceCents <= 0) return 0n;
+  return amountCents / BigInt(priceCents);
 }

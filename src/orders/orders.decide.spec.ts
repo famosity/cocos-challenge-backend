@@ -22,6 +22,25 @@ describe('decideOrder', () => {
     });
   });
 
+  it('stops before saving when the amount buys more shares than the column allows', () => {
+    expect(decideOrder(buy({ amountCents: 2_147_483_648n * 100n }), cash, 0, 100)).toEqual({
+      outcome: 'unprocessable',
+      code: 'ORDER_QUANTITY_OUT_OF_RANGE',
+    });
+  });
+
+  it('rejects a representable size when the cash cannot pay it', () => {
+    const decision = decideOrder(buy({ amountCents: 2_147_483_647n * 100n }), 0n, 0, 100);
+
+    expect(decision).toEqual({
+      outcome: 'reject',
+      status: 'REJECTED',
+      reason: 'INSUFFICIENT_FUNDS',
+      size: 2_147_483_647,
+      priceCents: 100,
+    });
+  });
+
   it('stops before saving when the amount does not buy one share', () => {
     expect(decideOrder(buy({ amountCents: 8_000n }), cash, 0, close)).toEqual({
       outcome: 'unprocessable',
