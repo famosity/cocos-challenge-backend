@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { DatabaseService } from '../src/database/database.service.js';
+import { InstrumentsRepository } from '../src/instruments/instruments.repository.js';
 import { useTestDatabase } from './use-test-database.js';
 
 useTestDatabase();
@@ -120,6 +121,79 @@ describe('GET /instruments', () => {
       details: [{ field: 'query', message: 'must not contain a null character' }],
     });
     expect(response.body.requestId).toBe(response.headers['x-request-id']);
+  });
+
+  it.each([
+    [{}, 1, 20],
+    [{ page: 3 }, 3, 20],
+    [{ pageSize: 10 }, 1, 10],
+    [{ page: 3, pageSize: 10 }, 3, 10],
+  ] as const)('lists a page with parameters %j', async (query, page, pageSize) => {
+    const response = await request(app.getHttpServer()).get('/instruments/all').query(query).expect(200);
+
+    expect(response.body.pagination).toMatchObject({ page, pageSize });
+    expect(response.body.items).toHaveLength(pageSize);
+  });
+
+  it('lists a stable catalog without cash instruments and reports the totals on an empty page', async () => {
+    const server = app.getHttpServer();
+    const catalog = await request(server).get('/instruments/all?pageSize=100').expect(200);
+    const items = catalog.body.items as Instrument[];
+    expect(items).not.toContainEqual(expect.objectContaining({ type: 'MONEDA' }));
+    expect(items).not.toContainEqual(expect.objectContaining({ ticker: 'ARS' }));
+    expect(catalog.body.pagination).toEqual({ page: 1, pageSize: 100, totalItems: items.length, totalPages: 1 });
+
+    const second = await request(server).get('/instruments/all?page=2&pageSize=10').expect(200);
+    expect(second.body.items).toEqual(items.slice(10, 20));
+    expect(second.body.pagination).toEqual({
+      page: 2,
+      pageSize: 10,
+      totalItems: items.length,
+      totalPages: Math.ceil(items.length / 10),
+    });
+
+    const lastPage = Math.ceil(items.length / 20);
+    const last = await request(server).get(`/instruments/all?page=${lastPage}`).expect(200);
+    expect(last.body.items).toEqual(items.slice((lastPage - 1) * 20));
+    const beyond = await request(server).get(`/instruments/all?page=${lastPage + 1}`).expect(200);
+    expect(beyond.body).toEqual({
+      items: [],
+      pagination: { page: lastPage + 1, pageSize: 20, totalItems: items.length, totalPages: lastPage },
+    });
+  });
+
+  it('returns zero total pages for an empty catalog', async () => {
+    const repository = app.get(InstrumentsRepository);
+    const list = vi.spyOn(repository, 'list').mockResolvedValueOnce({ items: [], totalItems: '0' });
+    try {
+      const response = await request(app.getHttpServer()).get('/instruments/all').expect(200);
+      expect(response.body).toEqual({
+        items: [],
+        pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+      });
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  it.each([
+    ['page=', 'page'],
+    ['page=0', 'page'],
+    ['page=-1', 'page'],
+    ['page=1.5', 'page'],
+    ['page=abc', 'page'],
+    ['page=9007199254740992', 'page'],
+    ['page=1&page=2', 'page'],
+    ['pageSize=', 'pageSize'],
+    ['pageSize=0', 'pageSize'],
+    ['pageSize=101', 'pageSize'],
+    ['pageSize=10&pageSize=20', 'pageSize'],
+  ])('rejects invalid pagination %s', async (query, field) => {
+    const response = await request(app.getHttpServer()).get(`/instruments/all?${query}`).expect(400);
+    expect(response.body).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: [expect.objectContaining({ field })],
+    });
   });
 
   it('rejects a query that is only spaces', async () => {

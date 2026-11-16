@@ -79,6 +79,13 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Catálogo de instrumentos
+
+- `GET /instruments?query=galicia` busca por ticker o nombre y devuelve un arreglo.
+- `GET /instruments/all?page=2&pageSize=20` devuelve el catálogo de instrumentos operables, ordenado por ticker e ID. La respuesta incluye `items` y `pagination` con `page`, `pageSize`, `totalItems` y `totalPages`.
+
+Si omitís `page` o `pageSize`, sus valores por defecto son 1 y 20 respectivamente. Ambos deben ser enteros positivos y el tamaño máximo es 100. Un parámetro vacío, repetido o inválido devuelve `400 VALIDATION_ERROR`. Una página posterior a la última devuelve `200` con `items: []` y los totales del catálogo. Si el catálogo está vacío, ambos totales son 0. ARS y los demás instrumentos `MONEDA` quedan fuera del listado y de la búsqueda.
+
 ## Run tests
 
 ```bash

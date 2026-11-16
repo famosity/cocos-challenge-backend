@@ -1,6 +1,6 @@
 # Notas técnicas
 
-El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Hay tres rutas: `GET /instruments`, `GET /users/:userId/portfolio` y `POST /orders`. El efectivo disponible y las acciones libres se calculan una sola vez, en `src/account`, y las usan la cartera y las órdenes. La valuación y el rendimiento quedan en la cartera. Un error de validación ya trae el campo en `details`. El formateador HTTP sigue leyendo el texto de las excepciones de Nest.
+El servicio es un proceso Nest. Los módulos son instrumentos, cartera, órdenes y base de datos. Las tres rutas del challenge son `GET /instruments`, `GET /users/:userId/portfolio` y `POST /orders`. El listado paginado `GET /instruments/all` amplía el catálogo. El efectivo disponible y las acciones libres se calculan una sola vez, en `src/account`, y las usan la cartera y las órdenes. La valuación y el rendimiento quedan en la cartera. Un error de validación ya trae el campo en `details`. El formateador HTTP sigue leyendo el texto de las excepciones de Nest.
 
 La base de la API es un PostgreSQL local. `DATABASE_URL` apunta ahí. Neon queda en `NEON_DATABASE_URL` y no se usa para escribir. Las suites que escriben leen `TEST_DATABASE_URL` y no usan la URL de la aplicación. Si esa variable no está o queda vacía, se detienen antes de preparar datos. En `.env.example` queda vacía: la base de las pruebas es otra, separada de la de desarrollo. Para levantar la base: `npm run db:up`. Docker crea el contenedor y carga `database.sql`, que trae el esquema y los datos de prueba. `npm run test:db` comprueba la conexión: hay 4 usuarios y filas en instrumentos, órdenes y cotizaciones. `npm run db:reset` borra el volumen y vuelve a cargar el archivo. El ejemplo de la URL de desarrollo está en `.env.example`.
 
@@ -14,6 +14,8 @@ Un id que no es un entero positivo responde 400. Un usuario que no existe respon
 
 `GET /instruments?query=` busca el texto en el ticker o en el nombre, sin distinguir mayúsculas. "ggal" devuelve GGAL. "Galicia" también, porque está en el nombre. Si el ticker coincide entero, esa fila va primero. El resto se ordena por ticker y después por id. Si no hay coincidencias, la respuesta es `[]`. `%` y `_` se buscan como caracteres, no como comodines. Un instrumento `MONEDA`, como ARS, no aparece: es el efectivo, no un activo para operar. Si `query` no viene, queda vacío al quitar espacios, llega repetido o contiene un carácter nulo, la respuesta es 400 con código `VALIDATION_ERROR` y el campo `query` en `details`.
 
+
+El listado paginado usa `page` y `pageSize` con defaults independientes de 1 y 20 y admite hasta 100 instrumentos por página. La consulta obtiene página y total de instrumentos operables en una sola sentencia, con el mismo filtro `MONEDA` de la búsqueda. El orden es `ticker ASC, id ASC` y una página fuera del rango devuelve `items` vacío con los totales.
 
 Cada solicitud recibe un id. Sale en el header `X-Request-Id`. Si la respuesta es un error, el mismo id va en el cuerpo. Al terminar se escribe una línea JSON con el método, la ruta, el estado HTTP y la duración.
 
@@ -31,32 +33,6 @@ El envío de una orden sigue este orden:
  -Si el monto no compra una acción, la cantidad no entra en la columna, o la orden es `MARKET` y no hay cierre, hace rollback y responde 422. 
  -Si faltan pesos o acciones, inserta `REJECTED` y confirma. 
  -Si alcanza, inserta `FILLED` o `NEW` y confirma. Una excepción a mitad de camino también hace rollback.
-
-```mermaid
-sequenceDiagram
-    actor U as Cliente
-    participant C as OrdersController
-    participant S as OrdersService
-    participant DB as PostgreSQL
-    U->>C: POST /orders
-    C->>C: Validar el cuerpo
-    C->>S: place
-    S->>DB: BEGIN READ COMMITTED
-    S->>DB: SELECT users.id FOR UPDATE
-    S->>DB: Leer instrumento, cierre y órdenes
-    alt Sin cierre, cantidad cero o fuera de rango
-        S->>DB: ROLLBACK
-        C-->>U: 422
-    else Faltan pesos o acciones
-        S->>DB: INSERT REJECTED y COMMIT
-        C-->>U: 201
-    else Orden aceptada
-        S->>DB: INSERT FILLED o NEW y COMMIT
-        C-->>U: 201
-    else Falla técnica
-        S->>DB: ROLLBACK
-    end
-```
 
 La corrida de entrega usa Node 22.18.0, NestJS 12.5.0, Vitest 4.1.12, oxlint 1.93.0 y PostgreSQL 16.16. `npm test` corre los unitarios. `npm run test:integration` llama al servicio y al repositorio contra PostgreSQL, sin HTTP. `npm run test:e2e` entra por la API. `npm run test:all` junta los tres. Los otros comandos de la corrida son `npm run db:up`, `npm run lint` y `npm run build`. Lint cerró sin errores, el build compiló y `test:all` dejó 108 tests en verde, en 14 archivos. Entran la búsqueda, la cartera del usuario 1, el 422 sin insert, el rollback y las dos compras de $800 que esperan el mismo `users.id`: una `FILLED`, una `REJECTED` y $200 disponibles. El historial de una venta que espera el bloqueo queda BUY, BUY, SELL y el rendimiento es `33.33`. Una búsqueda con carácter nulo responde `400` y `VALIDATION_ERROR`.
 
