@@ -37,7 +37,7 @@ describe('GET /instruments', () => {
   it('finds a ticker without caring about case', async () => {
     const response = await request(app.getHttpServer()).get('/instruments').query({ query: 'ggal' }).expect(200);
 
-    const body = response.body as Instrument[];
+    const body = response.body.items as Instrument[];
     expect(body[0]).toMatchObject({
       ticker: 'GGAL',
       name: 'Grupo Financiero Galicia',
@@ -49,7 +49,7 @@ describe('GET /instruments', () => {
   it('finds a partial name', async () => {
     const response = await request(app.getHttpServer()).get('/instruments').query({ query: 'Galicia' }).expect(200);
 
-    const tickers = (response.body as Instrument[]).map((instrument) => instrument.ticker);
+    const tickers = (response.body.items as Instrument[]).map((instrument) => instrument.ticker);
     expect(tickers).toContain('GGAL');
   });
 
@@ -60,15 +60,30 @@ describe('GET /instruments', () => {
 
     const response = await request(app.getHttpServer()).get('/instruments').query({ query: 'zzexact' }).expect(200);
 
-    expect((response.body as Instrument[]).map((instrument) => instrument.ticker)).toEqual(['ZZEXACT', 'AAAPART']);
+    expect((response.body.items as Instrument[]).map((instrument) => instrument.ticker)).toEqual(['ZZEXACT', 'AAAPART']);
+
+    const server = app.getHttpServer();
+    const first = await request(server).get('/instruments?query=zzexact&pageSize=1').expect(200);
+    expect(first.body.items).toEqual([expect.objectContaining({ ticker: 'ZZEXACT' })]);
+    expect(first.body.pagination).toEqual({ page: 1, pageSize: 1, totalItems: 2, totalPages: 2 });
+
+    const second = await request(server).get('/instruments?query=zzexact&page=2&pageSize=1').expect(200);
+    expect(second.body.items).toEqual([expect.objectContaining({ ticker: 'AAAPART' })]);
+    expect(second.body.pagination).toEqual({ page: 2, pageSize: 1, totalItems: 2, totalPages: 2 });
+
+    const beyond = await request(server).get('/instruments?query=zzexact&page=3&pageSize=1').expect(200);
+    expect(beyond.body).toEqual({
+      items: [],
+      pagination: { page: 3, pageSize: 1, totalItems: 2, totalPages: 2 },
+    });
   });
 
   it('does not list the cash instrument', async () => {
     const byTicker = await request(app.getHttpServer()).get('/instruments').query({ query: 'ARS' }).expect(200);
     const byName = await request(app.getHttpServer()).get('/instruments').query({ query: 'PESOS' }).expect(200);
 
-    expect(byTicker.body).toEqual([]);
-    expect(byName.body).toEqual([]);
+    expect(byTicker.body.items).toEqual([]);
+    expect(byName.body.items).toEqual([]);
   });
 
   it('returns an empty list when nothing matches', async () => {
@@ -77,19 +92,22 @@ describe('GET /instruments', () => {
       .query({ query: 'no-such-asset' })
       .expect(200);
 
-    expect(response.body).toEqual([]);
+    expect(response.body).toEqual({
+      items: [],
+      pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+    });
   });
 
   it('treats % and _ as literal characters', async () => {
     const percent = await request(app.getHttpServer()).get('/instruments').query({ query: '%' }).expect(200);
     const underscore = await request(app.getHttpServer()).get('/instruments').query({ query: '_' }).expect(200);
 
-    expect(percent.body).toEqual([]);
-    expect(underscore.body).toEqual([]);
+    expect(percent.body.items).toEqual([]);
+    expect(underscore.body.items).toEqual([]);
   });
 
-  it('rejects a missing query', async () => {
-    const response = await request(app.getHttpServer()).get('/instruments').expect(400);
+  it('rejects an explicitly empty query', async () => {
+    const response = await request(app.getHttpServer()).get('/instruments?query=').expect(400);
 
     expect(response.body).toMatchObject({
       statusCode: 400,
@@ -129,7 +147,7 @@ describe('GET /instruments', () => {
     [{ pageSize: 10 }, 1, 10],
     [{ page: 3, pageSize: 10 }, 3, 10],
   ] as const)('lists a page with parameters %j', async (query, page, pageSize) => {
-    const response = await request(app.getHttpServer()).get('/instruments/all').query(query).expect(200);
+    const response = await request(app.getHttpServer()).get('/instruments').query(query).expect(200);
 
     expect(response.body.pagination).toMatchObject({ page, pageSize });
     expect(response.body.items).toHaveLength(pageSize);
@@ -137,13 +155,13 @@ describe('GET /instruments', () => {
 
   it('lists a stable catalog without cash instruments and reports the totals on an empty page', async () => {
     const server = app.getHttpServer();
-    const catalog = await request(server).get('/instruments/all?pageSize=100').expect(200);
+    const catalog = await request(server).get('/instruments?pageSize=100').expect(200);
     const items = catalog.body.items as Instrument[];
     expect(items).not.toContainEqual(expect.objectContaining({ type: 'MONEDA' }));
     expect(items).not.toContainEqual(expect.objectContaining({ ticker: 'ARS' }));
     expect(catalog.body.pagination).toEqual({ page: 1, pageSize: 100, totalItems: items.length, totalPages: 1 });
 
-    const second = await request(server).get('/instruments/all?page=2&pageSize=10').expect(200);
+    const second = await request(server).get('/instruments?page=2&pageSize=10').expect(200);
     expect(second.body.items).toEqual(items.slice(10, 20));
     expect(second.body.pagination).toEqual({
       page: 2,
@@ -153,9 +171,9 @@ describe('GET /instruments', () => {
     });
 
     const lastPage = Math.ceil(items.length / 20);
-    const last = await request(server).get(`/instruments/all?page=${lastPage}`).expect(200);
+    const last = await request(server).get(`/instruments?page=${lastPage}`).expect(200);
     expect(last.body.items).toEqual(items.slice((lastPage - 1) * 20));
-    const beyond = await request(server).get(`/instruments/all?page=${lastPage + 1}`).expect(200);
+    const beyond = await request(server).get(`/instruments?page=${lastPage + 1}`).expect(200);
     expect(beyond.body).toEqual({
       items: [],
       pagination: { page: lastPage + 1, pageSize: 20, totalItems: items.length, totalPages: lastPage },
@@ -166,7 +184,7 @@ describe('GET /instruments', () => {
     const repository = app.get(InstrumentsRepository);
     const list = vi.spyOn(repository, 'list').mockResolvedValueOnce({ items: [], totalItems: '0' });
     try {
-      const response = await request(app.getHttpServer()).get('/instruments/all').expect(200);
+      const response = await request(app.getHttpServer()).get('/instruments').expect(200);
       expect(response.body).toEqual({
         items: [],
         pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
@@ -189,7 +207,7 @@ describe('GET /instruments', () => {
     ['pageSize=101', 'pageSize'],
     ['pageSize=10&pageSize=20', 'pageSize'],
   ])('rejects invalid pagination %s', async (query, field) => {
-    const response = await request(app.getHttpServer()).get(`/instruments/all?${query}`).expect(400);
+    const response = await request(app.getHttpServer()).get(`/instruments?${query}`).expect(400);
     expect(response.body).toMatchObject({
       code: 'VALIDATION_ERROR',
       details: [expect.objectContaining({ field })],

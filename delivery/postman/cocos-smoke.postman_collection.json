@@ -39,13 +39,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments/all",
+              "raw": "{{baseUrl}}/instruments",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "instruments",
-                "all"
+                "instruments"
               ]
             }
           },
@@ -85,13 +84,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments/all?page=2&pageSize=10",
+              "raw": "{{baseUrl}}/instruments?page=2&pageSize=10",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "instruments",
-                "all"
+                "instruments"
               ],
               "query": [
                 {
@@ -141,13 +139,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments/all?page={{catalogPage}}",
+              "raw": "{{baseUrl}}/instruments?page={{catalogPage}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "instruments",
-                "all"
+                "instruments"
               ],
               "query": [
                 {
@@ -163,7 +160,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.sendRequest(pm.variables.get('baseUrl') + '/instruments/all', function (error, response) {",
+                  "pm.sendRequest(pm.variables.get('baseUrl') + '/instruments', function (error, response) {",
                   "  if (error) throw error;",
                   "  if (response.code !== 200) throw new Error('No se pudo leer el total del catálogo');",
                   "  const totalItems = response.json().pagination.totalItems;",
@@ -212,13 +209,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments/all?page={{catalogPage}}",
+              "raw": "{{baseUrl}}/instruments?page={{catalogPage}}",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "instruments",
-                "all"
+                "instruments"
               ],
               "query": [
                 {
@@ -234,7 +230,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.sendRequest(pm.variables.get('baseUrl') + '/instruments/all', function (error, response) {",
+                  "pm.sendRequest(pm.variables.get('baseUrl') + '/instruments', function (error, response) {",
                   "  if (error) throw error;",
                   "  if (response.code !== 200) throw new Error('No se pudo leer el total del catálogo');",
                   "  const totalItems = response.json().pagination.totalItems;",
@@ -284,13 +280,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments/all?pageSize=101",
+              "raw": "{{baseUrl}}/instruments?pageSize=101",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
-                "instruments",
-                "all"
+                "instruments"
               ],
               "query": [
                 {
@@ -340,8 +335,8 @@
                   "pm.test('devuelve GGAL primero', function () {",
                   "  pm.response.to.have.status(200);",
                   "  const body = pm.response.json();",
-                  "  pm.expect(body).to.be.an('array').that.is.not.empty;",
-                  "  pm.expect(body[0]).to.eql({",
+                  "  pm.expect(body.items).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(body.items[0]).to.eql({",
                   "    id: 34,",
                   "    ticker: 'GGAL',",
                   "    name: 'Grupo Financiero Galicia',",
@@ -359,10 +354,10 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments?query=Galicia",
+              "raw": "{{baseUrl}}/instruments?query=Galicia&page=1&pageSize=1",
               "host": ["{{baseUrl}}"],
               "path": ["instruments"],
-              "query": [{ "key": "query", "value": "Galicia" }]
+              "query": [{ "key": "query", "value": "Galicia" }, { "key": "page", "value": "1" }, { "key": "pageSize", "value": "1" }]
             },
             "description": "Coincidencia parcial por nombre."
           },
@@ -374,8 +369,9 @@
                 "exec": [
                   "pm.test('incluye GGAL', function () {",
                   "  pm.response.to.have.status(200);",
-                  "  const tickers = pm.response.json().map((instrument) => instrument.ticker);",
-                  "  pm.expect(tickers).to.include('GGAL');",
+                  "  const tickers = pm.response.json().items.map((instrument) => instrument.ticker);",
+                  "  pm.expect(pm.response.json().pagination).to.include({ page: 1, pageSize: 1 });",
+                  "  pm.expect(tickers).to.eql(['GGAL']);",
                   "});"
                 ]
               }
@@ -402,7 +398,7 @@
                 "exec": [
                   "pm.test('devuelve una lista vacía', function () {",
                   "  pm.response.to.have.status(200);",
-                  "  pm.expect(pm.response.json()).to.eql([]);",
+                  "  pm.expect(pm.response.json().items).to.eql([]);",
                   "});"
                 ]
               }
@@ -430,7 +426,7 @@
                 "exec": [
                   "pm.test('no devuelve la moneda', function () {",
                   "  pm.response.to.have.status(200);",
-                  "  pm.expect(pm.response.json()).to.eql([]);",
+                  "  pm.expect(pm.response.json().items).to.eql([]);",
                   "});"
                 ]
               }
@@ -438,14 +434,15 @@
           ]
         },
         {
-          "name": "Query ausente",
+          "name": "Query vacío",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/instruments",
+              "raw": "{{baseUrl}}/instruments?query=",
               "host": ["{{baseUrl}}"],
-              "path": ["instruments"]
+              "path": ["instruments"],
+              "query": [{ "key": "query", "value": "" }]
             }
           },
           "event": [

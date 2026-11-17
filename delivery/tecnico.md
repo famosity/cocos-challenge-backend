@@ -10,9 +10,9 @@ El esquema mantiene `users`, `instruments`, `orders` y `marketdata`. Agregué `o
 
 ## Instrumentos
 
-La búsqueda usa `ILIKE` con parámetros, escapa los comodines y prioriza el ticker exacto. Un término ausente, vacío, repetido o con un carácter nulo devuelve 400. ARS y los demás instrumentos `MONEDA` se excluyen de la búsqueda y del listado porque representan efectivo.
+El catálogo y la búsqueda se consultan con `GET /instruments`: ambos leen la misma colección y devuelven `items` y `pagination`. `query` es opcional y se combina con `page` y `pageSize`. Si se envía vacío, repetido o con un carácter nulo, devuelve `400`. ARS y los demás instrumentos `MONEDA` quedan fuera porque representan efectivo.
 
-El catálogo paginado calcula la página y el total operable en la misma consulta, sobre el mismo filtro. El orden por ticker e ID permite desempatar. Los valores por defecto son página 1 y tamaño 20. El máximo de 100 acota la respuesta. Si la página queda fuera del catálogo, la API devuelve los totales y `items: []`.
+PostgreSQL aplica el filtro de texto con `ILIKE` parametrizado y escapa los comodines. Ordena primero por coincidencia exacta de ticker cuando hay filtro y desempata por ticker e ID. La página y el total salen de la misma consulta con el mismo filtro. Por defecto devuelve la página 1 con hasta 20 instrumentos, y el máximo es 100. Una página fuera de rango devuelve `items: []` con los totales de la consulta.
 
 ## Cartera
 

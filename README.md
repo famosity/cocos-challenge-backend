@@ -31,12 +31,11 @@ La API de desarrollo queda en `http://localhost:3000`. Para confirmar que lee la
 
 | Método y ruta | Qué devuelve |
 |---|---|
-| `GET /instruments?query=galicia` | Busca por ticker o nombre. Prioriza el ticker exacto. |
-| `GET /instruments/all?page=1&pageSize=20` | Lista los instrumentos operables. Devuelve `items` y `pagination` con page, pageSize, totalItems y totalPages. |
+| `GET /instruments` | Lista instrumentos operables. `query` filtra por ticker o nombre y se puede combinar con `page` y `pageSize`. |
 | `GET /users/1/portfolio` | Informa el valor total de la cuenta, los pesos disponibles y las posiciones con cantidad, valor y rendimiento. |
 | `POST /orders` | Guarda una orden BUY o SELL. Si se persiste, devuelve `201` con el ID y el estado. |
 
-El listado usa página 1 y tamaño 20 si se omiten los parámetros. El máximo es 100 por página. Una página que queda fuera del catálogo devuelve una lista vacía con los totales. ARS representa el efectivo de la cuenta y queda fuera de los instrumentos operables.
+Usá `GET /instruments` para abrir el catálogo o `GET /instruments?query=galicia&page=1&pageSize=10` para buscar. Ambos devuelven `items` y `pagination` con `page`, `pageSize`, `totalItems` y `totalPages`. El total cuenta las coincidencias antes de paginar. Los valores por defecto son página 1 y tamaño 20, con un máximo de 100 por página. Si la página queda fuera del rango, `items` está vacío y los totales se conservan. Un `query` vacío devuelve `400`. ARS representa el efectivo de la cuenta y queda fuera de los instrumentos operables.
 
 Ejemplo de una compra MARKET de una acción de GGAL, instrumento 34 en la semilla:
 
