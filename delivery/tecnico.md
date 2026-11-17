@@ -14,6 +14,16 @@ El catálogo y la búsqueda se consultan con `GET /instruments`: ambos leen la m
 
 PostgreSQL aplica el filtro de texto con `ILIKE` parametrizado y escapa los comodines. Ordena primero por coincidencia exacta de ticker cuando hay filtro y desempata por ticker e ID. La página y el total salen de la misma consulta con el mismo filtro. Por defecto devuelve la página 1 con hasta 20 instrumentos, y el máximo es 100. Una página fuera de rango devuelve `items: []` con los totales de la consulta.
 
+## Tiempos de espera y recuperación
+
+El pool usa `connectionTimeoutMillis = 5000`, `lock_timeout = 5000`, `statement_timeout = 10000` y `query_timeout = 15000`. El primero acota la adquisición de conexiones. PostgreSQL cancela la sentencia si tarda demasiado o no consigue un bloqueo. El límite del cliente cubre el caso en que el servidor deja de responder, como un contenedor pausado. Los valores iniciales están centralizados en `src/database/database-timeouts.ts` y se ajustarían con mediciones.
+
+Las consultas GET y las órdenes devuelven `503 DATABASE_UNAVAILABLE` ante esos fallos, con el mismo formato de error y el ID de la petición. Una sentencia cancelada dentro de una transacción lleva a `ROLLBACK`. Si el cliente agota la espera o pierde la conexión, se descarta esa conexión. Cerrar el socket no garantiza que el backend deje de ejecutar instantáneamente la sentencia. PostgreSQL revierte la transacción abierta al procesar la desconexión. Tampoco se devuelve al pool una conexión cuyo rollback falló. Los errores de conexiones inactivas se registran para evitar que terminen el proceso de Node.
+
+Si falla la respuesta de `COMMIT`, puede haber una orden confirmada aunque la API responda `503`. El cliente debe reintentar con la misma clave de idempotencia y el mismo cuerpo. Si el registro existe, recupera el resultado. Si la transacción se revirtió, puede crear la orden. La API no reintenta escrituras por su cuenta. Cada límite corresponde a una operación, por lo que no representa un máximo global de duración del endpoint.
+
+Las regresiones cubren consultas lentas, GET bloqueado, orden bloqueada con su clave libre para reintentar, rollback de una escritura después del timeout del cliente y un servidor TCP que acepta la conexión sin responder al protocolo PostgreSQL. También verifican el descarte de conexiones ante timeout de lectura, rollback fallido y confirmación incierta.
+
 ## Cartera
 
 El **efectivo contable** suma depósitos y ventas ejecutadas, y resta retiros y compras ejecutadas. Para calcular los **pesos disponibles**, se restan las compras LIMIT en `NEW`. Las ventas LIMIT en `NEW` reservan acciones. Las posiciones y el patrimonio reflejan los movimientos ejecutados. Una LIMIT en `FILLED` se contabiliza como una ejecución y deja de generar reserva. Las órdenes canceladas y rechazadas quedan fuera del cálculo.
@@ -41,10 +51,12 @@ La clave distingue mayúsculas y admite hasta 128 letras, dígitos, puntos, guio
 
 ## Qué verifiqué
 
-Las pruebas de integración y E2E se ejecutaron con PostgreSQL 16 local desechable, separado de la base de desarrollo. Pasaron lint, compilación y **140 pruebas en 16 archivos**. Estos fueron los casos principales que revisé:
+Las pruebas de integración y E2E se ejecutaron con PostgreSQL 16 local desechable, separado de la base de desarrollo. Pasaron lint, compilación y **160 pruebas en 19 archivos**. Estos fueron los casos principales que revisé:
 
 | Escenario | Resultado observado |
 |---|---|
+| PostgreSQL pausado con una conexión ya abierta | GET devuelve `503 DATABASE_UNAVAILABLE` a los 15,04 segundos. Al reanudar PostgreSQL, vuelve a responder `200`. |
+| Orden que agota la espera del bloqueo | Devuelve `503`, no guarda la orden ni consume la clave. El reintento con la misma clave reserva una sola vez. |
 | Dos compras de $800 con $1.000 disponibles y sin clave | Una `FILLED`, una `REJECTED` y $200 disponibles. |
 | Una venta inicia primero, pero una compra adquiere antes el bloqueo | El historial queda BUY → BUY → SELL. Quedan 10 acciones con rendimiento de 33,33%. |
 | Dos compras concurrentes de $800 con la misma clave y $2.000 disponibles | Mismo ID en ambas respuestas, una orden y $1.200 disponibles. |
