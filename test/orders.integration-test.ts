@@ -34,6 +34,15 @@ describe('order transaction', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
     await database.query(
+      `DELETE FROM order_idempotency
+       WHERE userid = $1
+          OR orderid IN (
+            SELECT id FROM orders
+            WHERE instrumentid IN (SELECT id FROM instruments WHERE ticker LIKE 'INT%')
+          )`,
+      [userId],
+    );
+    await database.query(
       `DELETE FROM orders
        WHERE userid = $1
           OR instrumentid IN (SELECT id FROM instruments WHERE ticker LIKE 'INT%')`,
@@ -79,7 +88,59 @@ describe('order transaction', () => {
     expect(after.positions).toEqual([]);
     expect(buys[0]?.n).toBe(0);
   });
+
+  it('rolls back the order when the idempotency record cannot be saved and then accepts a retry', async () => {
+    const instrumentId = await insertInstrument(database);
+    await database.query(
+      `INSERT INTO orders (instrumentid, userid, size, price, side, status, type, datetime)
+       VALUES ($1, $2, 1000, 1, 'CASH_IN', 'FILLED', 'MARKET', '2020-01-01')`,
+      [pesos, userId],
+    );
+    const key = 'retry-after-rollback';
+    const save = repository.saveIdempotency.bind(repository);
+    const spy = vi.spyOn(repository, 'saveIdempotency').mockImplementation(async (query, record) => {
+      await save(query, record);
+      throw new Error('idempotency failure');
+    });
+
+    try {
+      await expect(
+        orders.place({ userId, instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 }, key),
+      ).rejects.toThrow('idempotency failure');
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(await portfolio.get(userId)).toMatchObject({ availableCash: '1000.00', positions: [] });
+    expect(await instrumentOrders(database, instrumentId)).toBe(0);
+    expect(await idempotencyRows(database, key)).toBe(0);
+
+    const placed = await orders.place({ userId, instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 }, key);
+    const replay = await orders.place({ userId, instrumentId, side: 'BUY', type: 'MARKET', quantity: 1 }, key);
+
+    expect(placed.status).toBe('FILLED');
+    expect(replay).toEqual(placed);
+    expect(await instrumentOrders(database, instrumentId)).toBe(1);
+    expect(await idempotencyRows(database, key)).toBe(1);
+    expect((await portfolio.get(userId)).availableCash).toBe('900.00');
+  });
 });
+
+async function instrumentOrders(database: DatabaseService, instrumentId: number): Promise<number> {
+  const rows = await database.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM orders WHERE instrumentid = $1`,
+    [instrumentId],
+  );
+  return rows[0]?.n ?? 0;
+}
+
+async function idempotencyRows(database: DatabaseService, key: string): Promise<number> {
+  const rows = await database.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM order_idempotency WHERE userid = $1 AND key = $2`,
+    [userId, key],
+  );
+  return rows[0]?.n ?? 0;
+}
 
 async function insertInstrument(database: DatabaseService): Promise<number> {
   const rows = await database.query<{ id: number }>(

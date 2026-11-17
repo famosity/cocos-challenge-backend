@@ -73,4 +73,29 @@ export class OrdersRepository {
     if (id === undefined) throw new Error('order was not inserted');
     return id;
   }
+
+  async findIdempotency(
+    query: Sql,
+    userId: number,
+    key: string,
+  ): Promise<{ request: unknown; response: unknown } | null> {
+    const rows = await query<{ request: unknown; response: unknown }>(
+      `SELECT request, response
+       FROM order_idempotency
+       WHERE userid = $1 AND key = $2`,
+      [userId, key],
+    );
+    return rows[0] ?? null;
+  }
+
+  async saveIdempotency(
+    query: Sql,
+    record: { userId: number; key: string; orderId: number; request: unknown; response: unknown },
+  ): Promise<void> {
+    await query(
+      `INSERT INTO order_idempotency (userid, key, orderid, request, response)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)`,
+      [record.userId, record.key, record.orderId, JSON.stringify(record.request), JSON.stringify(record.response)],
+    );
+  }
 }
