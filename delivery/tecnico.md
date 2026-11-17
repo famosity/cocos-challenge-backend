@@ -1,0 +1,57 @@
+# Notas técnicas del challenge
+
+Decisiones de implementación y resultados de las pruebas. Para levantar la API y usar Postman, ver el [README](../README.md). El [PDF de diagramas](diagrams/Cocos_Diagramas_Tecnicos.pdf) muestra las relaciones del esquema y los flujos HTTP.
+
+## Estructura del backend
+
+Elegí un monolito modular con NestJS. Hay un proceso, una base y módulos por funcionalidad. Los controladores validan la entrada, los servicios coordinan los casos de uso y los repositorios concentran el SQL parametrizado que ejecuta `pg`. Las reglas de disponibilidad viven en `src/account` y se usan desde cartera y órdenes. Eso permite probarlas con datos simples y mantener el mismo cálculo en los dos flujos.
+
+El esquema mantiene `users`, `instruments`, `orders` y `marketdata`. Agregué `order_idempotency` para recuperar el resultado de un envío. `orders` sigue siendo la fuente de efectivo, tenencias y reservas. En el esquema provisto, la fecha de cotización es `marketdata.date`. La fecha de una orden se guarda en `orders.datetime`.
+
+## Instrumentos
+
+La búsqueda usa `ILIKE` con parámetros, escapa los comodines y prioriza el ticker exacto. Un término ausente, vacío, repetido o con un carácter nulo devuelve 400. ARS y los demás instrumentos `MONEDA` se excluyen de la búsqueda y del listado porque representan efectivo.
+
+El catálogo paginado calcula la página y el total operable en la misma consulta, sobre el mismo filtro. El orden por ticker e ID permite desempatar. Los valores por defecto son página 1 y tamaño 20. El máximo de 100 acota la respuesta. Si la página queda fuera del catálogo, la API devuelve los totales y `items: []`.
+
+## Cartera
+
+El **efectivo contable** suma depósitos y ventas ejecutadas, y resta retiros y compras ejecutadas. Para calcular los **pesos disponibles**, se restan las compras LIMIT en `NEW`. Las ventas LIMIT en `NEW` reservan acciones. Las posiciones y el patrimonio reflejan los movimientos ejecutados. Una LIMIT en `FILLED` se contabiliza como una ejecución y deja de generar reserva. Las órdenes canceladas y rechazadas quedan fuera del cálculo.
+
+El **valor total** suma efectivo contable y posiciones al último cierre fechado. Se desempata por ID cuando dos cotizaciones tienen la misma fecha. Si el cierre elegido falta o es inválido, la posición se mantiene con valor y rendimiento nulos. El total también es nulo y se siguen informando los pesos disponibles. Una fila pertinente con un dato necesario ausente interrumpe el cálculo para evitar que se opere con un saldo incorrecto.
+
+El **rendimiento de una posición abierta** se calcula como `(cierre - costo promedio) / costo promedio × 100`. El costo promedio se actualiza con compras ejecutadas, se mantiene en una venta parcial y se reinicia al cerrar la posición. La tenencia histórica de −10 acciones se muestra con signo, se valúa si hay un cierre y tiene rendimiento nulo. La disponibilidad para vender tiene piso cero.
+
+## Órdenes, concurrencia y reintentos
+
+El controlador valida usuario, instrumento, lado y tipo. Acepta cantidad o monto, y exige precio en una LIMIT. Una orden por monto calcula acciones enteras con el precio aplicable. En una compra se valida el monto pedido y se registra o reserva el costo de las acciones resultantes. En una venta se comprueba la cantidad calculada contra las acciones libres.
+
+Cada envío abre una transacción `READ COMMITTED` y bloquea `users.id` con `SELECT ... FOR UPDATE` antes de leer el historial. La siguiente solicitud del mismo usuario espera y puede ver los movimientos confirmados por la primera. Si la orden supera los recursos disponibles, se guarda como `REJECTED` con su motivo. Los errores que impiden procesar una orden, como una MARKET sin cierre o un instrumento `MONEDA`, terminan sin insertar. Una falla durante el alta revierte la transacción.
+
+La orden nueva toma `statement_timestamp()` en el INSERT, ya con el bloqueo adquirido. `now()` tomaba el inicio de la transacción y podía invertir el historial cuando una compra adquiría el bloqueo antes que una venta que había iniciado primero. El orden `datetime, id` es importante para reconstruir el costo promedio.
+
+Si el cliente manda `Idempotency-Key`, el servicio busca la clave **después del bloqueo y antes de consultar precio o disponibilidad**. PostgreSQL garantiza unicidad por `(userid, key)`. El registro guarda la orden asociada, una representación normalizada de la solicitud y el resultado original. La orden y ese registro se confirman juntos.
+
+- **Misma clave y mismos datos.** Se repite el ID, estado y motivo original, incluso si la orden quedó `REJECTED`. Se conserva el efecto de la primera orden.
+- **Misma clave y datos distintos.** Devuelve `409 IDEMPOTENCY_KEY_REUSED`. Cantidad y monto son solicitudes distintas aunque den el mismo número de acciones.
+- **Sin orden persistida.** La clave sigue libre. Por ejemplo, una MARKET sin cotización puede reintentarse cuando aparezca un cierre válido.
+- **Sin header.** Cada POST se procesa como una solicitud independiente.
+
+La clave distingue mayúsculas y admite hasta 128 letras, dígitos, puntos, guiones o guiones bajos. Se compara la solicitud normalizada. Por ejemplo, `"800.0"` y `"800.00"` representan el mismo monto en centavos. Cada intento recibe su propio `X-Request-Id`. Ese ID correlaciona la respuesta con los logs. Las validaciones propias informan el campo del error de forma explícita.
+
+## Qué verifiqué
+
+Las pruebas de integración y E2E se ejecutaron con PostgreSQL 16 local desechable, separado de la base de desarrollo. Pasaron lint, compilación y **140 pruebas en 16 archivos**. Estos fueron los casos principales que revisé:
+
+| Escenario | Resultado observado |
+|---|---|
+| Dos compras de $800 con $1.000 disponibles y sin clave | Una `FILLED`, una `REJECTED` y $200 disponibles. |
+| Una venta inicia primero, pero una compra adquiere antes el bloqueo | El historial queda BUY → BUY → SELL. Quedan 10 acciones con rendimiento de 33,33%. |
+| Dos compras concurrentes de $800 con la misma clave y $2.000 disponibles | Mismo ID en ambas respuestas, una orden y $1.200 disponibles. |
+| Falla al guardar el registro de idempotencia | Se revierte también la inserción de la orden. |
+| Aplicar dos veces el SQL de actualización sobre una copia del esquema anterior | Se crea la tabla y se conservan las 11 órdenes originales. |
+| Búsqueda con `GG%00AL` y catálogo con página fuera de rango | La búsqueda devuelve 400 y el catálogo devuelve 200 con una lista vacía y los totales. |
+
+También ejecuté las tres colecciones exportadas. Fueron 46 solicitudes y 107 comprobaciones, sin fallas.
+
+Para probar escrituras por HTTP, la [demo local](../README.md#demo-con-postman) usa `cocos_orders_demo`. Las suites automatizadas toman `TEST_DATABASE_URL`. La base Neon del challenge se inspeccionó en modo solo lectura.

@@ -1,0 +1,790 @@
+{
+  "info": {
+    "_postman_id": "cocos-smoke",
+    "name": "Cocos API — Smoke",
+    "description": "Comprueba búsqueda, catálogo, cartera y errores con la semilla inicial. Ejecutá primero el script de demo y elegí el entorno local. Las solicitudes dejan intactas las órdenes.\r\n\r\nDesde la raíz: npx newman run delivery/postman/cocos-smoke.postman_collection.json -e delivery/postman/local.postman_environment.json",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:3001"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('incluye X-Request-Id', function () {",
+          "  const requestId = pm.response.headers.get('X-Request-Id');",
+          "  pm.expect(requestId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);",
+          "});",
+          "",
+          "pm.test('responde en menos de 2 segundos', function () {",
+          "  pm.expect(pm.response.responseTime).to.be.below(2000);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Instrumentos",
+      "item": [
+        {
+          "name": "Catálogo con paginación por defecto",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments/all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "instruments",
+                "all"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Catálogo con paginación por defecto', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const { items, pagination } = pm.response.json();",
+                  "  const expectedPage = 1;",
+                  "  const expectedPageSize = 20;",
+                  "  pm.expect(pagination.page, 'page').to.eql(expectedPage);",
+                  "  pm.expect(pagination.pageSize, 'pageSize').to.eql(expectedPageSize);",
+                  "  const totalItems = pagination.totalItems;",
+                  "  pm.expect(Number.isSafeInteger(totalItems) && totalItems >= 0, 'totalItems entero no negativo').to.be.true;",
+                  "  pm.expect(pagination.totalPages, 'totalPages').to.eql(Math.ceil(totalItems / expectedPageSize));",
+                  "  const remaining = totalItems - (expectedPage - 1) * expectedPageSize;",
+                  "  const expectedItems = Math.max(0, Math.min(expectedPageSize, remaining));",
+                  "  pm.expect(items).to.be.an('array').with.lengthOf(expectedItems);",
+                  "  items.forEach(function (instrument) {",
+                  "    pm.expect(instrument).to.have.all.keys('id', 'ticker', 'name', 'type');",
+                  "    pm.expect(instrument.ticker).not.to.eql('ARS');",
+                  "    pm.expect(instrument.type).not.to.eql('MONEDA');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Catálogo con página y tamaño explícitos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments/all?page=2&pageSize=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "instruments",
+                "all"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Catálogo con página y tamaño explícitos', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const { items, pagination } = pm.response.json();",
+                  "  const expectedPage = 2;",
+                  "  const expectedPageSize = 10;",
+                  "  pm.expect(pagination.page, 'page').to.eql(expectedPage);",
+                  "  pm.expect(pagination.pageSize, 'pageSize').to.eql(expectedPageSize);",
+                  "  const totalItems = pagination.totalItems;",
+                  "  pm.expect(Number.isSafeInteger(totalItems) && totalItems >= 0, 'totalItems entero no negativo').to.be.true;",
+                  "  pm.expect(pagination.totalPages, 'totalPages').to.eql(Math.ceil(totalItems / expectedPageSize));",
+                  "  const remaining = totalItems - (expectedPage - 1) * expectedPageSize;",
+                  "  const expectedItems = Math.max(0, Math.min(expectedPageSize, remaining));",
+                  "  pm.expect(items).to.be.an('array').with.lengthOf(expectedItems);",
+                  "  items.forEach(function (instrument) {",
+                  "    pm.expect(instrument).to.have.all.keys('id', 'ticker', 'name', 'type');",
+                  "    pm.expect(instrument.ticker).not.to.eql('ARS');",
+                  "    pm.expect(instrument.type).not.to.eql('MONEDA');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Última página del catálogo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments/all?page={{catalogPage}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "instruments",
+                "all"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{catalogPage}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest(pm.variables.get('baseUrl') + '/instruments/all', function (error, response) {",
+                  "  if (error) throw error;",
+                  "  if (response.code !== 200) throw new Error('No se pudo leer el total del catálogo');",
+                  "  const totalItems = response.json().pagination.totalItems;",
+                  "  if (!Number.isSafeInteger(totalItems) || totalItems < 0) throw new Error('Total de instrumentos inválido');",
+                  "  const totalPages = Math.ceil(totalItems / 20);",
+                  "  const page = Math.max(1, totalPages);",
+                  "  pm.variables.set('catalogPage', String(page));",
+                  "  pm.variables.set('catalogTotalItems', String(totalItems));",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Última página del catálogo', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const { items, pagination } = pm.response.json();",
+                  "  const expectedPage = Number(pm.variables.get('catalogPage'));",
+                  "  const expectedPageSize = 20;",
+                  "  pm.expect(pagination.page, 'page').to.eql(expectedPage);",
+                  "  pm.expect(pagination.pageSize, 'pageSize').to.eql(expectedPageSize);",
+                  "  const totalItems = pagination.totalItems;",
+                  "  pm.expect(Number.isSafeInteger(totalItems) && totalItems >= 0, 'totalItems entero no negativo').to.be.true;",
+                  "  pm.expect(totalItems, 'totalItems debe coincidir con la primera página').to.eql(Number(pm.variables.get('catalogTotalItems')));",
+                  "  pm.expect(pagination.totalPages, 'totalPages').to.eql(Math.ceil(totalItems / expectedPageSize));",
+                  "  const remaining = totalItems - (expectedPage - 1) * expectedPageSize;",
+                  "  const expectedItems = Math.max(0, Math.min(expectedPageSize, remaining));",
+                  "  pm.expect(items).to.be.an('array').with.lengthOf(expectedItems);",
+                  "  items.forEach(function (instrument) {",
+                  "    pm.expect(instrument).to.have.all.keys('id', 'ticker', 'name', 'type');",
+                  "    pm.expect(instrument.ticker).not.to.eql('ARS');",
+                  "    pm.expect(instrument.type).not.to.eql('MONEDA');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Página fuera del catálogo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments/all?page={{catalogPage}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "instruments",
+                "all"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "{{catalogPage}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.sendRequest(pm.variables.get('baseUrl') + '/instruments/all', function (error, response) {",
+                  "  if (error) throw error;",
+                  "  if (response.code !== 200) throw new Error('No se pudo leer el total del catálogo');",
+                  "  const totalItems = response.json().pagination.totalItems;",
+                  "  if (!Number.isSafeInteger(totalItems) || totalItems < 0) throw new Error('Total de instrumentos inválido');",
+                  "  const totalPages = Math.ceil(totalItems / 20);",
+                  "  const page = totalPages + 1;",
+                  "  pm.variables.set('catalogPage', String(page));",
+                  "  pm.variables.set('catalogTotalItems', String(totalItems));",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Página fuera del catálogo', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const { items, pagination } = pm.response.json();",
+                  "  const expectedPage = Number(pm.variables.get('catalogPage'));",
+                  "  const expectedPageSize = 20;",
+                  "  pm.expect(pagination.page, 'page').to.eql(expectedPage);",
+                  "  pm.expect(pagination.pageSize, 'pageSize').to.eql(expectedPageSize);",
+                  "  const totalItems = pagination.totalItems;",
+                  "  pm.expect(Number.isSafeInteger(totalItems) && totalItems >= 0, 'totalItems entero no negativo').to.be.true;",
+                  "  pm.expect(totalItems, 'totalItems debe coincidir con la primera página').to.eql(Number(pm.variables.get('catalogTotalItems')));",
+                  "  pm.expect(pagination.totalPages, 'totalPages').to.eql(Math.ceil(totalItems / expectedPageSize));",
+                  "  const remaining = totalItems - (expectedPage - 1) * expectedPageSize;",
+                  "  const expectedItems = Math.max(0, Math.min(expectedPageSize, remaining));",
+                  "  pm.expect(items).to.be.an('array').with.lengthOf(expectedItems);",
+                  "  pm.expect(items).to.eql([]);",
+                  "  items.forEach(function (instrument) {",
+                  "    pm.expect(instrument).to.have.all.keys('id', 'ticker', 'name', 'type');",
+                  "    pm.expect(instrument.ticker).not.to.eql('ARS');",
+                  "    pm.expect(instrument.type).not.to.eql('MONEDA');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tamaño de página inválido",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments/all?pageSize=101",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "instruments",
+                "all"
+              ],
+              "query": [
+                {
+                  "key": "pageSize",
+                  "value": "101"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Tamaño de página inválido', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.details[0].field).to.eql('pageSize');",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar ticker GGAL",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments?query=ggal",
+              "host": ["{{baseUrl}}"],
+              "path": ["instruments"],
+              "query": [{ "key": "query", "value": "ggal" }]
+            },
+            "description": "Coincidencia exacta de ticker, sin distinguir mayúsculas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('devuelve GGAL primero', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(body[0]).to.eql({",
+                  "    id: 34,",
+                  "    ticker: 'GGAL',",
+                  "    name: 'Grupo Financiero Galicia',",
+                  "    type: 'ACCIONES'",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar por nombre Galicia",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments?query=Galicia",
+              "host": ["{{baseUrl}}"],
+              "path": ["instruments"],
+              "query": [{ "key": "query", "value": "Galicia" }]
+            },
+            "description": "Coincidencia parcial por nombre."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('incluye GGAL', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const tickers = pm.response.json().map((instrument) => instrument.ticker);",
+                  "  pm.expect(tickers).to.include('GGAL');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin coincidencias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments?query=no-such-asset",
+              "host": ["{{baseUrl}}"],
+              "path": ["instruments"],
+              "query": [{ "key": "query", "value": "no-such-asset" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('devuelve una lista vacía', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "ARS no se lista",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments?query=ARS",
+              "host": ["{{baseUrl}}"],
+              "path": ["instruments"],
+              "query": [{ "key": "query", "value": "ARS" }]
+            },
+            "description": "La moneda de efectivo queda fuera de la búsqueda."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('no devuelve la moneda', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query ausente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instruments",
+              "host": ["{{baseUrl}}"],
+              "path": ["instruments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rechaza la búsqueda vacía', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.include({",
+                  "    statusCode: 400,",
+                  "    code: 'VALIDATION_ERROR',",
+                  "    message: 'La solicitud es inválida'",
+                  "  });",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "  pm.expect(body.details).to.eql([{ field: 'query', message: 'must not be empty' }]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cartera",
+      "item": [
+        {
+          "name": "Usuario 1 semilla",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/1/portfolio",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "1", "portfolio"]
+            },
+            "description": "Cartera cargada por database.sql. Falla si el usuario 1 ya operó en esta base."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('devuelve la cartera semilla', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.eql({",
+                  "    totalValue: '889756.00',",
+                  "    availableCash: '627500.00',",
+                  "    positions: [",
+                  "      { instrumentId: 31, ticker: 'BMA', quantity: -10, marketValue: '-15028.00', totalReturnPct: null },",
+                  "      { instrumentId: 54, ticker: 'METR', quantity: 500, marketValue: '114750.00', totalReturnPct: -8.2 },",
+                  "      { instrumentId: 47, ticker: 'PAMP', quantity: 40, marketValue: '37034.00', totalReturnPct: -0.45 }",
+                  "    ]",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Usuario 4 sin movimientos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/4/portfolio",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "4", "portfolio"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('devuelve ceros y ninguna posición', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.eql({",
+                  "    totalValue: '0.00',",
+                  "    availableCash: '0.00',",
+                  "    positions: []",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Usuario inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/99999/portfolio",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "99999", "portfolio"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404 USER_NOT_FOUND', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.include({",
+                  "    statusCode: 404,",
+                  "    code: 'USER_NOT_FOUND',",
+                  "    message: 'El usuario no existe'",
+                  "  });",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "userId inválido",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/abc/portfolio",
+              "host": ["{{baseUrl}}"],
+              "path": ["users", "abc", "portfolio"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rechaza un id que no es entero positivo', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.details).to.eql([{ field: 'userId', message: 'must be a positive integer' }]);",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Órdenes",
+      "description": "Estos POST no persisten. 400 corta en el parser. 404 y 422 hacen rollback.",
+      "item": [
+        {
+          "name": "Body vacío",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}", "options": { "raw": { "language": "json" } } },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('exige userId', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.include({ statusCode: 400, code: 'VALIDATION_ERROR', message: 'La solicitud es inválida' });",
+                  "  pm.expect(body.details).to.eql([{ field: 'userId', message: 'must be a positive integer' }]);",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "MARKET con price",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"instrumentId\": 34,\n  \"side\": \"BUY\",\n  \"type\": \"MARKET\",\n  \"quantity\": 1,\n  \"price\": \"100.00\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            },
+            "description": "GGAL es el instrumento 34 de la semilla. El precio no se acepta en MARKET, así que no llega a la base."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rechaza el precio en MARKET', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.code).to.eql('VALIDATION_ERROR');",
+                  "  pm.expect(body.details).to.eql([{ field: 'price', message: 'must not be sent with MARKET' }]);",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Instrumento inexistente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"instrumentId\": 99999,\n  \"side\": \"BUY\",\n  \"type\": \"MARKET\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404 INSTRUMENT_NOT_FOUND', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.include({",
+                  "    statusCode: 404,",
+                  "    code: 'INSTRUMENT_NOT_FOUND',",
+                  "    message: 'El instrumento no existe'",
+                  "  });",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Moneda no operable",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 1,\n  \"instrumentId\": 66,\n  \"side\": \"BUY\",\n  \"type\": \"MARKET\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            },
+            "description": "El instrumento 66 de la semilla es ARS (MONEDA). La transacción hace rollback y no inserta la orden."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 422 INSTRUMENT_NOT_TRADABLE', function () {",
+                  "  pm.response.to.have.status(422);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.include({",
+                  "    statusCode: 422,",
+                  "    code: 'INSTRUMENT_NOT_TRADABLE',",
+                  "    message: 'El instrumento no se puede operar'",
+                  "  });",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Usuario inexistente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": 99999,\n  \"instrumentId\": 34,\n  \"side\": \"BUY\",\n  \"type\": \"MARKET\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["orders"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('responde 404 USER_NOT_FOUND', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.include({",
+                  "    statusCode: 404,",
+                  "    code: 'USER_NOT_FOUND',",
+                  "    message: 'El usuario no existe'",
+                  "  });",
+                  "  pm.expect(body.requestId).to.eql(pm.response.headers.get('X-Request-Id'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
